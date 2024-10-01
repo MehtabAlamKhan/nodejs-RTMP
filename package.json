@@ -1,0 +1,20 @@
+{
+  "name": "rtmp-by-copilot",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "build": "npx tsc",
+    "prestart": "npm run build",
+    "start": "node  dist/server.js",
+    "watch": "tsc -w",
+    "dev": "node --watch --inspect dist/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "typescript": "^5.6.2"
+  }
+}

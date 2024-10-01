@@ -1,0 +1,13 @@
+fs.appendFile(
+        "./LOG.txt",
+        "OFFSET : " +
+          offSet +
+          "\r\n" +
+          "BODY LENGTH : " +
+          RtmpSession.bodyLength +
+          "\r\n" +
+          "DATA LENGTH : " +
+          dataLength +
+          "\r\n\r\n",
+        () => {}
+      );
