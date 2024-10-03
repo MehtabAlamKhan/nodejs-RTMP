@@ -2,7 +2,7 @@ import net from "node:net";
 import Crypto from "node:crypto";
 import RtmpSession from "./RtmpSession";
 
-import { generateS0S1S2 } from "./handShake";
+import generateS0S1S2 from "./RtmpHandshake";
 
 const RTMP_VERSION = 3;
 const HANDSHAKE_SIZE = 1536;
@@ -47,17 +47,15 @@ function createNewConnection(data: Buffer, clientId: string) {
   const clientVersion = data[0];
   const clientTime = data.readUInt32BE(1);
 
-  const s0 = Buffer.from([RTMP_VERSION]);
-  const s1 = Buffer.alloc(HANDSHAKE_SIZE, Crypto.randomBytes(HANDSHAKE_SIZE));
-  const s2 = Buffer.alloc(HANDSHAKE_SIZE, Crypto.randomBytes(HANDSHAKE_SIZE));
-  s1.writeUInt32BE(clientTime, 0);
-  s2.writeUInt32BE(clientTime, 0);
-  s2.writeUInt32BE(clientTime, 4);
+  // const s0 = Buffer.from([RTMP_VERSION]);
+  // const s1 = Buffer.alloc(HANDSHAKE_SIZE, Crypto.randomBytes(HANDSHAKE_SIZE));
+  // const s2 = Buffer.alloc(HANDSHAKE_SIZE, Crypto.randomBytes(HANDSHAKE_SIZE));
+  // s1.writeUInt32BE(clientTime, 0);
+  // s2.writeUInt32BE(clientTime, 0);
+  // s2.writeUInt32BE(clientTime, 4);
 
-  let sss = generateS0S1S2(data);
-  RtmpConnectionPool.socket.write(sss);
-  // RtmpConnectionPool.socket.write(Buffer.concat([s0, s1]));
-  // RtmpConnectionPool.socket.write(s2);
+  let s0s1s2 = generateS0S1S2(data.subarray(1));
+  RtmpConnectionPool.socket.write(s0s1s2);
 
   RtmpConnectionPool.clientsConnected.set(clientId, {
     isStreaming: false,
