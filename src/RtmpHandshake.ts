@@ -7,12 +7,6 @@ const MESSAGE_FORMAT_2 = 2;
 const SHA256Digestlength = 32;
 const RTMP_BUFFER_SIZE = 1536;
 
-const RandomCrud = Buffer.from([
-  0xf0, 0xee, 0xc2, 0x4a, 0x80, 0x68, 0xbe, 0xe8, 0x2e, 0x00, 0xd0, 0xd1, 0x02,
-  0x9e, 0x7e, 0x57, 0x6e, 0xec, 0x5d, 0x2d, 0x29, 0x80, 0x6f, 0xab, 0x93, 0xb8,
-  0xe6, 0x36, 0xcf, 0xeb, 0x31, 0xae,
-]);
-
 const ServerFMSConst = "Genuine Adobe Flash Media Server 001";
 const ServerFMSConstBuffer = Buffer.concat([
   Buffer.from(ServerFMSConst, "utf-8"),
@@ -26,19 +20,20 @@ const ClientFPConstBuffer = Buffer.concat([
 ]);
 
 function generateS0S1S2(data: Buffer) {
-  let time = data.subarray(0, 4);
+  let version = Buffer.alloc(1, 3);
   let clientTimeInt = data.readUInt32BE(0);
   let messageFormat = getMessageFormat(data);
 
   if (messageFormat === MESSAGE_FORMAT_0) {
-    return Buffer.concat([time, data, data]);
+    return Buffer.concat([version, data, data]);
   }
 
-  return Buffer.concat([
-    time,
+  let res = Buffer.concat([
+    version,
     genS1(messageFormat),
     genS2(messageFormat, data),
   ]);
+  return res;
 }
 
 function getMessageFormat(data: Buffer) {
@@ -50,10 +45,10 @@ function getMessageFormat(data: Buffer) {
   // 772:775    Obfuscated pointer to "Genuine FMS" key
   // 776:1535   Random Data and "Genuine FMS" key.
   let sdl = GetServerGenuineFMSConstDigestOffset(data.subarray(772, 776));
-  let message = Buffer.concat([
-    data.subarray(0, sdl),
-    data.subarray(SHA256Digestlength + sdl, RTMP_BUFFER_SIZE),
-  ]);
+  let message = Buffer.concat(
+    [data.subarray(0, sdl), data.subarray(SHA256Digestlength + sdl)],
+    1504
+  );
   let calculatedHmac = calcHmac(message, ClientFPConst);
   let providedHmac = data.subarray(sdl, sdl + SHA256Digestlength);
   if (calculatedHmac.equals(providedHmac)) {
@@ -67,10 +62,10 @@ function getMessageFormat(data: Buffer) {
   // 12:1531    Random Data, 128-bit Diffie-Hellmann key and "Genuine FMS" key.
   // 1532:1535  Obfuscated pointer to 128-bit Diffie-Hellmann key
   sdl = GetClientGenuineFPConstDigestOffset(data.subarray(8, 12));
-  message = Buffer.concat([
-    data.subarray(0, sdl),
-    data.subarray(sdl + SHA256Digestlength, RTMP_BUFFER_SIZE),
-  ]);
+  message = Buffer.concat(
+    [data.subarray(0, sdl), data.subarray(sdl + SHA256Digestlength)],
+    1504
+  );
   calculatedHmac = calcHmac(message, ClientFPConst);
   providedHmac = data.subarray(sdl, sdl + SHA256Digestlength);
   if (calculatedHmac.equals(providedHmac)) {
@@ -96,10 +91,13 @@ function calcHmac(data: Buffer, key: string | Buffer) {
 }
 
 function genS1(msgFmt: number) {
-  let res = Buffer.concat([
-    Buffer.from([0, 0, 0, 0, 1, 2, 3, 4]),
-    Crypto.randomBytes(RTMP_BUFFER_SIZE - 8),
-  ]);
+  let res = Buffer.concat(
+    [
+      Buffer.from([0, 0, 0, 0, 1, 2, 3, 4]),
+      Crypto.randomBytes(RTMP_BUFFER_SIZE - 8),
+    ],
+    RTMP_BUFFER_SIZE
+  );
   let sdo;
   if (msgFmt === 1) {
     // 8 - 11 should be the hashed key

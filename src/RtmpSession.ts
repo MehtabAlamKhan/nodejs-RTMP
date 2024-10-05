@@ -4,6 +4,7 @@ import Crypto from "node:crypto";
 import * as AMFd from "./AMF/amf0Decoding";
 import * as AMFe from "./AMF/amf0Encoding";
 import fs from "node:fs";
+import RtmpConnectionPool from "./RtmpConnectionPool";
 
 // RTMP Handshake constants
 
@@ -162,13 +163,12 @@ function createRtmpHeader(): RTMP_HeaderType {
 }
 
 function rtmpPayloadHandler(payload: Buffer, typeID: number) {
-  if (typeID <= 0 || typeID > 20) console.log(true);
   switch (typeID) {
     case 1: //RTMP_TYPE_SET_CHUNK_SIZE:
-      return rtmpControlHandler(payload);
     // case 2: //RTMP_TYPE_ABORT
     // case 3: //RTMP_TYPE_ACKNOWLEDGEMENT:
-    // case 5: //RTMP_TYPE_WINDOW_ACKNOWLEDGEMENT_SIZE:
+    case 5: //RTMP_TYPE_WINDOW_ACKNOWLEDGEMENT_SIZE:
+      return rtmpControlHandler(payload, typeID);
     // case 6: //RTMP_TYPE_SET_PEER_BANDWIDTH:
     //   return;
     // // case RTMP_TYPE_EVENT:
@@ -188,8 +188,14 @@ function rtmpPayloadHandler(payload: Buffer, typeID: number) {
       return;
   }
 }
-function rtmpControlHandler(data: Buffer) {
-  RtmpSession.RTMP_IN_CHUNK_SIZE = data.readUInt32BE(0);
+function rtmpControlHandler(data: Buffer, typeID: number) {
+  switch (typeID) {
+    case 1: //set chunk size
+      RtmpSession.RTMP_IN_CHUNK_SIZE = data.readUInt32BE(0);
+    case 5:
+      RtmpSession.ackSize = data.readUInt32BE(0);
+    default:
+  }
 }
 function rtmpAudioHandler(data: Buffer) {
   let format = data[0] >> 4;

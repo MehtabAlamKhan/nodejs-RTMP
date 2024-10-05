@@ -53,6 +53,7 @@ function createNewConnection(data: Buffer, clientId: string) {
   // s1.writeUInt32BE(clientTime, 0);
   // s2.writeUInt32BE(clientTime, 0);
   // s2.writeUInt32BE(clientTime, 4);
+  // RtmpConnectionPool.socket.write(Buffer.concat([s0, s1, s2]));
 
   let s0s1s2 = generateS0S1S2(data.subarray(1));
   RtmpConnectionPool.socket.write(s0s1s2);
