@@ -1,37 +1,18 @@
-ARG NODE_VERSION=22.3.0
-
-FROM node:${NODE_VERSION}-alpine as base
-
-WORKDIR /usr/src/app
-
-FROM base as deps
-
-RUN --mount=type=bind,source=package.json,target=package.json \
-    --mount=type=bind,source=package-lock.json,target=package-lock.json \
-    --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev
-
-
-FROM deps as build
-
-RUN --mount=type=bind,source=package.json,target=package.json \
-    --mount=type=bind,source=package-lock.json,target=package-lock.json \
-    --mount=type=cache,target=/root/.npm \
-    npm ci
-
+#STAGE 1: Install dependencies and build the app
+FROM arm64v8/node:14 AS build 
+WORKDIR /usr/app/nodejs-Rtmp
 COPY . .
-# Run the build script.
+RUN npm install
 RUN npm run build
 
-FROM base as final
 
-USER node
-
-COPY package.json .
-
-COPY --from=deps /usr/src/app/node_modules ./node_modules
-COPY --from=build /usr/src/app/dist ./dist
+#STAGE 2: Create the production image
+FROM arm64v8/node:14
+WORKDIR /usr/app/nodejs-Rtmp
+COPY --from=build /usr/app/nodejs-Rtmp/dist ./dist
+COPY --from=build /usr/app/nodejs-Rtmp/node_modules ./node_modules
+COPY --from=build /usr/app/nodejs-Rtmp/package*.json ./
 
 EXPOSE 1935
 
-CMD npm run start
+CMD ["npm", "run", "start"]

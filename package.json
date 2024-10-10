@@ -4,7 +4,6 @@
   "main": "server.js",
   "scripts": {
     "build": "npx tsc",
-    "prestart": "npm run build",
     "start": "node  dist/server.js",
     "watch": "tsc -w",
     "dev": "node --watch --inspect dist/server.js"

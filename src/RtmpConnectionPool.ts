@@ -63,10 +63,10 @@ function createNewConnection(data: Buffer, clientId: string) {
     session: new RtmpSession(clientId, RtmpConnectionPool.socket),
   });
 
-  clearInterval(RtmpConnectionPool.showAllConnectionsInterval);
-  RtmpConnectionPool.showAllConnectionsInterval = setInterval(() => {
-    console.log(RtmpConnectionPool.clientsConnected);
-  }, 1000);
+  // clearInterval(RtmpConnectionPool.showAllConnectionsInterval);
+  // RtmpConnectionPool.showAllConnectionsInterval = setInterval(() => {
+  //   console.log(RtmpConnectionPool.clientsConnected);
+  // }, 1000);
 }
 function getClientId(socket: net.Socket): string {
   let clientId = "";
