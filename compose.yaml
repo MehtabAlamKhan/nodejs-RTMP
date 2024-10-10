@@ -1,0 +1,8 @@
+version: '27.2.0'
+services:
+  server:
+    build: ./
+    container_name: nodejs-rtmp_c1
+    ports:
+      - '1935:1935'
+      
