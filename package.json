@@ -1,12 +1,12 @@
 {
-  "name": "rtmp-by-copilot",
+  "name": "nodejs-rtmp",
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
     "build": "npx tsc",
     "start": "node  dist/server.js",
     "watch": "tsc -w",
-    "dev": "node --watch --inspect dist/server.js"
+    "dev": "node --watch dist/server.js"
   },
   "keywords": [],
   "author": "",
