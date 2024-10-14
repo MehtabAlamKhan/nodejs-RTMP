@@ -2,8 +2,8 @@ import RtmpServer from "./RtmpServer/RtmpServer";
 import TransMuxingServer from "./TransmuxingServer/TransmuxingServer";
 
 class Main {
-  rtmpserver: RtmpServer;
-  transMuxingServer: TransMuxingServer;
+  private rtmpserver: RtmpServer;
+  private transMuxingServer: TransMuxingServer;
   constructor() {
     this.rtmpserver = new RtmpServer();
     this.rtmpserver.run();

@@ -5,6 +5,7 @@ class TransMuxingServer {
   constructor() {}
 
   run() {
+    console.log("TRANSMUXING SERVER RUNNING");
     essentials.streamEvents.on("postPublish", this.onPostPublish.bind(this));
   }
 
