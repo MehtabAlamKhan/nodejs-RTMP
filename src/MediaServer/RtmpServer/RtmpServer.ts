@@ -1,12 +1,12 @@
 import Net from "node:net";
-import RtmpConnectionPool from "./RtmpConnectionPool";
+import RtmpSession from "./RtmpSession";
 
 class RtmpServer {
   server: Net.Server;
   constructor() {
     this.server = Net.createServer((socket) => {
-      const rtmpConnectionPool = new RtmpConnectionPool(socket);
-      rtmpConnectionPool.start();
+      const session = new RtmpSession(socket);
+      session.start();
     });
   }
   run() {
