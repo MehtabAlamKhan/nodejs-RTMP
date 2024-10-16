@@ -1,10 +1,11 @@
 import { mkdir } from "fs";
 import { EventEmitter } from "stream";
 import { ChildProcessWithoutNullStreams, spawn } from "child_process";
+import * as essentials from "../Essentials";
 
 class TransMuxingSession extends EventEmitter {
   mediaroot = "";
-  ffmpeg = "";
+  ffmpegPath = "";
   streamPath = "";
   rtmpPort = 0;
   app = "";
@@ -13,7 +14,7 @@ class TransMuxingSession extends EventEmitter {
   constructor(conf: any) {
     super();
     this.mediaroot = conf.mediaroot;
-    this.ffmpeg = conf.ffmpeg;
+    this.ffmpegPath = conf.ffmpeg;
     this.streamPath = conf.streamPath;
     this.rtmpPort = conf.rtmpPort;
     this.app = conf.app;
@@ -30,9 +31,25 @@ class TransMuxingSession extends EventEmitter {
     let argv = `-y -i ${inPath} -c:v copy -c:a aac -ab 64k -ac 1 -ar 4410 -f tee -map 0:a? -map 0:v? ${hlsFlags}`;
     let argvArray = argv.split(" ");
 
-    this.ffmpegExe = spawn(this.ffmpeg, argvArray);
+    this.ffmpegExe = spawn(this.ffmpegPath, argvArray);
+    this.ffmpegExe.on("error", (e) => {
+      console.log("FF ERR: ", e);
+    });
 
-    // this.ffmpegExe.on("")
+    this.ffmpegExe.stdout.on("data", (data: Buffer) => {
+      console.log("FF DATA OUT: ", data.toString("utf-8"));
+    });
+
+    this.ffmpegExe.stderr.on("data", (data: Buffer) => {
+      console.log("FF DATA ERR: ", data.toString("utf-8"));
+    });
+
+    this.ffmpegExe.on("close", (code) => {
+      console.log("TRANSMUX ENDED - ", code);
+    });
+  }
+  end(id: string) {
+    this.ffmpegExe.kill();
   }
 }
 

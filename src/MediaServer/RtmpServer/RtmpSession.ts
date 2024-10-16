@@ -7,11 +7,7 @@ import fs from "node:fs";
 import generateS0S1S2 from "./RtmpHandshake";
 import * as essentials from "../Essentials";
 import { generateID } from "../misc";
-import {
-  AudioCodeNames,
-  AudioSampleRates,
-  VideoCodecNames,
-} from "../AudioVideo";
+import { AudioCodeNames, AudioSampleRates, VideoCodecNames } from "../AudioVideo";
 
 // RTMP Handshake constants
 
@@ -106,7 +102,8 @@ class RtmpSession {
   appName: string;
   playerStreamPath: string;
   playerStreamId: number;
-  players: Set<Buffer>;
+  players: Set<string>;
+  cachedFrames: number;
   streamCache: Set<Buffer>;
 
   constructor(socket: net.Socket) {
@@ -159,20 +156,21 @@ class RtmpSession {
     this.appName = "";
     this.playerStreamPath = "";
     this.playerStreamId = 0;
-    this.players = new Set();
 
+    this.players = new Set();
+    this.cachedFrames = 0;
     this.streamCache = new Set();
 
     essentials.streamSessions.set(this.ID, this);
   }
   start() {
-    this.socket.on("data", this.onData.bind(this));
-    this.socket.on("close", this.onClose.bind(this));
-    this.socket.on("error", this.onError.bind(this));
-    this.socket.on("timeout", this.onTimeout.bind(this));
+    this.socket.on("data", this.onSocketData.bind(this));
+    this.socket.on("close", this.onSocketClose.bind(this));
+    this.socket.on("error", this.onSocketError.bind(this));
+    this.socket.on("timeout", this.onSocketTimeout.bind(this));
   }
 
-  onData(data: Buffer) {
+  onSocketData(data: Buffer) {
     switch (this.connectionState) {
       case 1:
         const clientVersion = data[0];
@@ -186,9 +184,15 @@ class RtmpSession {
         break;
     }
   }
-  onClose() {}
-  onError() {}
-  onTimeout() {}
+  onSocketClose() {
+    this.stop();
+  }
+  onSocketError() {
+    this.stop();
+  }
+  onSocketTimeout() {
+    this.stop();
+  }
 
   startParsingRtmpPackets(data: Buffer) {
     const dataLength = data.length;
@@ -242,24 +246,13 @@ class RtmpSession {
 
         this.remaining = this.bodyLength;
         payload = Buffer.alloc(0);
-        uptoLength = Math.min(
-          this.RTMP_IN_CHUNK_SIZE,
-          dataLength - offSet,
-          this.bodyLength
-        );
+        uptoLength = Math.min(this.RTMP_IN_CHUNK_SIZE, dataLength - offSet, this.bodyLength);
       } else {
         offSet += 1;
-        uptoLength = Math.min(
-          this.RTMP_IN_CHUNK_SIZE,
-          this.remaining,
-          dataLength - offSet
-        );
+        uptoLength = Math.min(this.RTMP_IN_CHUNK_SIZE, this.remaining, dataLength - offSet);
       }
 
-      payload = Buffer.concat([
-        payload,
-        data.subarray(offSet, offSet + uptoLength),
-      ]);
+      payload = Buffer.concat([payload, data.subarray(offSet, offSet + uptoLength)]);
       offSet += uptoLength;
       this.remaining -= uptoLength;
       if (this.remaining <= 0) {
@@ -290,6 +283,8 @@ class RtmpSession {
       // case 3: //RTMP_TYPE_ACKNOWLEDGEMENT:
       case 5: //RTMP_TYPE_WINDOW_ACKNOWLEDGEMENT_SIZE:
         return this.rtmpControlHandler(payload, typeID);
+      case 4:
+        return this.eventHandler();
       // case 6: //RTMP_TYPE_SET_PEER_BANDWIDTH:
       //   return;
       // // case RTMP_TYPE_EVENT:
@@ -318,8 +313,9 @@ class RtmpSession {
       default:
     }
   }
+  eventHandler() {}
+
   rtmpAudioHandler(data: Buffer) {
-    return;
     let format = data[0] >> 4;
     let sampleRate = (data[0] >> 2) & 3;
     let sampleSize = (data[0] >> 1) & 1;
@@ -332,7 +328,7 @@ class RtmpSession {
       this.audioCodecName = AudioCodeNames[format];
     }
 
-    if (format == 10 && data[0] == 0) {
+    if ((format == 10 || format == 13) && data[1] == 0) {
       this.aacSequenceHeader = Buffer.alloc(data.length);
       data.copy(this.aacSequenceHeader);
       this.audioProfileName = "LC";
@@ -356,10 +352,26 @@ class RtmpSession {
     } else {
       this.streamCache.add(rtmpChunks);
     }
+
+    for (let playerID of this.players) {
+      let session = essentials.streamSessions.get(playerID);
+      if (session) {
+        if (session.cachedFrames === 0) {
+          session.socket.cork();
+        }
+        rtmpChunks.writeUInt32LE(session.playerStreamId, 8);
+        session?.socket.write(rtmpChunks);
+        session.cachedFrames++;
+        if (session.cachedFrames >= 10) {
+          process.nextTick(() => session.socket.uncork());
+          session.cachedFrames = 0;
+        }
+      }
+    }
   }
 
   rtmpVideoHandler(data: Buffer) {
-    return;
+    // return;
     let isExHeader = ((data[0] >> 4) & 0b1000) !== 0;
     let frame_type = (data[0] >> 4) & 0b0111;
     let codec_id = data[0] & 0x0f;
@@ -377,10 +389,7 @@ class RtmpSession {
           data[2] = 0;
           data[3] = 0;
           data[4] = 0;
-        } else if (
-          packetType == PacketTypeCodedFrames ||
-          packetType == PacketTypeCodedFramesX
-        ) {
+        } else if (packetType == PacketTypeCodedFrames || packetType == PacketTypeCodedFramesX) {
           if (packetType == PacketTypeCodedFrames) {
             data = data.subarray(3);
           } else {
@@ -457,14 +466,26 @@ class RtmpSession {
       if (frame_type == 1) {
         this.streamCache.clear();
       }
-      if (
-        (codec_id == 7 || codec_id == 12 || codec_id == 13) &&
-        frame_type == 1 &&
-        data[1] == 0
-      ) {
+      if ((codec_id == 7 || codec_id == 12 || codec_id == 13) && frame_type == 1 && data[1] == 0) {
         //skip avc sequence header
       } else {
         this.streamCache.add(rtmpChunks);
+      }
+    }
+
+    for (let playerID of this.players) {
+      let session = essentials.streamSessions.get(playerID);
+      if (session) {
+        if (session.cachedFrames === 0) {
+          session.socket.cork();
+        }
+        rtmpChunks.writeUint32LE(session.playerStreamId, 8);
+        session.socket.write(rtmpChunks);
+        session.cachedFrames++;
+        if (session.cachedFrames >= 10) {
+          process.nextTick(() => session.socket.uncork());
+          session.cachedFrames = 0;
+        }
       }
     }
   }
@@ -484,23 +505,11 @@ class RtmpSession {
       case "publish":
         this.onPublish(invokeMessage);
         break;
+      case "deleteStream":
+        this.onDeleteStream(invokeMessage);
+        break;
       case "play":
         this.onPlay(invokeMessage);
-        break;
-      case "close":
-      case "seek":
-      case "pause":
-      case "resume":
-      case "bufferLength":
-      case "appendBytes":
-      case "appendBytesAction":
-      case "getBytes":
-      case "time":
-      case "length":
-      case "client":
-      case "server":
-      case "onMetaData":
-      case "onCuePoint":
         break;
     }
   }
@@ -521,7 +530,16 @@ class RtmpSession {
           dataObj: dataMessage.data,
         };
 
-        let metaData = AMFe.encodeAmf0data(opt);
+        this.metaData = AMFe.encodeAmf0data(opt);
+        let packet = this.createRtmpPacket();
+        packet.header.fmtType = RTMP_CHUNK_TYPE_0;
+        packet.header.chunkStreamID = RTMP_CHANNEL_DATA;
+        packet.header.typeID = RTMP_TYPE_DATA;
+        packet.payload = this.metaData;
+        packet.header.bodyLength = packet.payload.length;
+        let rtmpChunks = this.createRtmpChunks(packet);
+
+        break;
       // console.log(metaData);
     }
   }
@@ -540,18 +558,12 @@ class RtmpSession {
 
   onPublish(invokeMessage: any) {
     //Do authentication with stream key and stream path
-    let streamPath =
-      "/" + this.appName + "/" + invokeMessage.streamKey.split("?")[0];
+    let streamPath = "/" + this.appName + "/" + invokeMessage.streamKey.split("?")[0];
 
     essentials.publishers.set(streamPath, this.ID);
-    this.respondPublish(
-      this.publishStreamId,
-      "status",
-      "NetStream.Publish.Start",
-      `${streamPath} is published.`
-    );
+    this.respondPublish(this.publishStreamId, "status", "NetStream.Publish.Start", `${streamPath} is published.`);
 
-    essentials.streamEvents.emit("postPublish", this.ID, streamPath);
+    essentials.streamEvents.emit("postStreamStart", this.ID, streamPath);
   }
 
   onPlay(invokeMessage: any) {
@@ -565,73 +577,66 @@ class RtmpSession {
       console.log(this.playerStreamPath + "NOT FOUND");
     }
   }
+  onDeleteStream(invokeMessage: any) {
+    essentials.streamEvents.emit("postStreamEnd", this.ID);
+    essentials.streamSessions.delete(this.ID);
+    essentials.publishers.delete(this.playerStreamPath);
+  }
 
   respondPlay() {
     this.sendStreamStatus(0, this.playerStreamId);
-    this.sendStatusMessage(
-      this.playerStreamId,
-      "status",
-      "NetStream.Play.Reset",
-      "Playing and resetting stream."
-    );
-    this.sendStatusMessage(
-      this.playerStreamId,
-      "status",
-      "NetStream.Play.Start",
-      "Started playing stream."
-    );
+    this.sendStatusMessage(this.playerStreamId, "status", "NetStream.Play.Reset", "Playing and resetting stream.");
+    this.sendStatusMessage(this.playerStreamId, "status", "NetStream.Play.Start", "Started playing stream.");
     this.sendRtmpSampleAccess();
   }
   onStartPlay() {
     let streamerId = essentials.publishers.get(this.playerStreamPath);
     let streamer = essentials.streamSessions.get(streamerId);
-    let players = streamer.players;
-    players.add(this.ID);
+    if (streamer) {
+      let players = streamer.players;
+      players.add(this.ID);
 
-    if (streamer.metaData != null) {
-      let packet = this.createRtmpPacket();
-      packet.header.fmtType = RTMP_CHUNK_TYPE_0;
-      packet.header.chunkStreamID = RTMP_CHANNEL_DATA;
-      packet.header.typeID = RTMP_TYPE_DATA;
-      packet.payload = streamer.metaData;
-      packet.header.bodyLength = packet.payload.length;
-      packet.header.streamID = this.playerStreamId;
-      let chunks = this.createRtmpChunks(packet);
-      this.socket.write(chunks);
-    }
-
-    if (streamer.audioCodec === 10 || streamer.audioCodec === 13) {
-      let packet = this.createRtmpPacket();
-      packet.header.fmtType = RTMP_CHUNK_TYPE_0;
-      packet.header.chunkStreamID = RTMP_CHANNEL_AUDIO;
-      packet.header.typeID = RTMP_TYPE_AUDIO;
-      packet.payload = streamer.aacSequenceHeader;
-      packet.header.bodyLength = packet.payload.length;
-      packet.header.streamID = this.playerStreamId;
-      let chunks = this.createRtmpChunks(packet);
-      this.socket.write(chunks);
-    }
-
-    if (
-      streamer.videoCodec === 7 ||
-      streamer.videoCodec === 12 ||
-      streamer.videoCodec === 13
-    ) {
-      let packet = this.createRtmpPacket();
-      packet.header.fmtType = RTMP_CHUNK_TYPE_0;
-      packet.header.chunkStreamID = RTMP_CHANNEL_VIDEO;
-      packet.header.typeID = RTMP_TYPE_VIDEO;
-      packet.payload = streamer.avcSequenceHeader;
-      packet.header.bodyLength = packet.payload.length;
-      packet.header.streamID = this.playerStreamId;
-      let chunks = this.createRtmpChunks(packet);
-      this.socket.write(chunks);
-    }
-
-    if (streamer.streamCache != null) {
-      for (let chunks of streamer.streamCache) {
-        chunks.writeUInt32LE(this.playerStreamId, 8);
+      if (streamer.metaData != null) {
+        let packet = this.createRtmpPacket();
+        packet.header.fmtType = RTMP_CHUNK_TYPE_0;
+        packet.header.chunkStreamID = RTMP_CHANNEL_DATA;
+        packet.header.typeID = RTMP_TYPE_DATA;
+        packet.payload = streamer.metaData;
+        packet.header.bodyLength = packet.payload.length;
+        packet.header.streamID = this.playerStreamId;
+        let chunks = this.createRtmpChunks(packet);
         this.socket.write(chunks);
+      }
+
+      if (streamer.audioCodec === 10 || streamer.audioCodec === 13) {
+        let packet = this.createRtmpPacket();
+        packet.header.fmtType = RTMP_CHUNK_TYPE_0;
+        packet.header.chunkStreamID = RTMP_CHANNEL_AUDIO;
+        packet.header.typeID = RTMP_TYPE_AUDIO;
+        packet.payload = streamer.aacSequenceHeader;
+        packet.header.bodyLength = packet.payload.length;
+        packet.header.streamID = this.playerStreamId;
+        let chunks = this.createRtmpChunks(packet);
+        this.socket.write(chunks);
+      }
+
+      if (streamer.videoCodec === 7 || streamer.videoCodec === 12 || streamer.videoCodec === 13) {
+        let packet = this.createRtmpPacket();
+        packet.header.fmtType = RTMP_CHUNK_TYPE_0;
+        packet.header.chunkStreamID = RTMP_CHANNEL_VIDEO;
+        packet.header.typeID = RTMP_TYPE_VIDEO;
+        packet.payload = streamer.avcSequenceHeader;
+        packet.header.bodyLength = packet.payload.length;
+        packet.header.streamID = this.playerStreamId;
+        let chunks = this.createRtmpChunks(packet);
+        this.socket.write(chunks);
+      }
+
+      if (streamer.streamCache != null) {
+        for (let chunks of streamer.streamCache) {
+          chunks.writeUInt32LE(this.playerStreamId, 8);
+          this.socket.write(chunks);
+        }
       }
     }
   }
@@ -645,12 +650,7 @@ class RtmpSession {
     this.socket.write(buffer);
   }
 
-  sendStatusMessage(
-    sid: number,
-    level: string,
-    code: string,
-    description: string
-  ) {
+  sendStatusMessage(sid: number, level: string, code: string, description: string) {
     let opt = {
       cmd: "onStatus",
       transId: 0,
@@ -669,25 +669,19 @@ class RtmpSession {
     this.socket.write(buffer);
   }
   sendWindowACK(size: number) {
-    let windowAckBuffer = Buffer.from([
-      2, 0, 0, 0, 0, 0, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0,
-    ]);
+    let windowAckBuffer = Buffer.from([2, 0, 0, 0, 0, 0, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0]);
     windowAckBuffer.writeUInt32BE(size, 12);
     this.socket.write(windowAckBuffer);
   }
   setPeerBandwidth(size: number, type: number) {
-    let peerBandBuffer = Buffer.from([
-      2, 0, 0, 0, 0, 0, 5, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    ]);
+    let peerBandBuffer = Buffer.from([2, 0, 0, 0, 0, 0, 5, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     peerBandBuffer.writeUInt32BE(size, 12);
     //set peer bandwidth limit type
     peerBandBuffer[16] = type;
     this.socket.write(peerBandBuffer);
   }
   setChunkSize(size: number) {
-    let chunkSizeBuffer = Buffer.from([
-      2, 0, 0, 0, 0, 0, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-    ]);
+    let chunkSizeBuffer = Buffer.from([2, 0, 0, 0, 0, 0, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
     chunkSizeBuffer.writeUInt32BE(size, 12);
     this.socket.write(chunkSizeBuffer);
   }
@@ -717,12 +711,7 @@ class RtmpSession {
     };
     this.encodeAndRespond(0, resOpt);
   }
-  respondPublish(
-    sid: number,
-    level: string,
-    code: string,
-    description: string
-  ) {
+  respondPublish(sid: number, level: string, code: string, description: string) {
     let resOpt = {
       cmd: "onStatus",
       transId: sid,
@@ -770,14 +759,8 @@ class RtmpSession {
     let chunkOffset = 0;
     let payloadOffset = 0;
 
-    let chunkBasicHeader = this.createChunkBasicHeader(
-      header.fmtType,
-      header.chunkStreamID
-    );
-    let chunkBasicHeader3 = this.createChunkBasicHeader(
-      RTMP_FMT_TYPE_3,
-      header.chunkStreamID
-    );
+    let chunkBasicHeader = this.createChunkBasicHeader(header.fmtType, header.chunkStreamID);
+    let chunkBasicHeader3 = this.createChunkBasicHeader(RTMP_FMT_TYPE_3, header.chunkStreamID);
     let chunkMessageHeader = this.createChunkMessageHeader(header);
 
     let chunkBasicHeaderLength = chunkBasicHeader.length;
@@ -794,12 +777,7 @@ class RtmpSession {
     while (payloadSize > 0) {
       if (payloadSize > chunkSize) {
       } else {
-        payload.copy(
-          buffer,
-          chunkOffset,
-          payloadOffset,
-          payloadOffset + payloadSize
-        );
+        payload.copy(buffer, chunkOffset, payloadOffset, payloadOffset + payloadSize);
         chunkOffset += payloadSize;
         payloadOffset += payloadSize;
         payloadSize -= payloadSize;
@@ -841,6 +819,12 @@ class RtmpSession {
       buffer.writeInt32LE(header.streamID, 7);
     }
     return buffer;
+  }
+
+  stop() {
+    essentials.streamSessions.delete(this.ID);
+    essentials.publishers.delete(this.playerStreamPath);
+    this.socket.destroy();
   }
 }
 export default RtmpSession;

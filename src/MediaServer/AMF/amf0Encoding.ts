@@ -5,9 +5,11 @@ const rtmpCmdCode: rtmpCodeType = {
   _result: ["transId", "cmdObj", "info"],
   publish: ["transId", "info"],
   onStatus: ["transId", "cmdObj", "info"],
+  onMetaData: ["dataObj"],
 };
 const rtmpDataCode: rtmpCodeType = {
   onMetaData: ["dataObj"],
+  "@setDataFrame": ["method", "dataObj"],
 };
 
 type amf0EncodingRulesType = {

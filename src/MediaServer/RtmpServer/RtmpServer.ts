@@ -9,10 +9,13 @@ class RtmpServer {
       session.start();
     });
   }
-  run() {
+  start() {
     this.server.listen(1935, () =>
       console.log("RTMP SERVER STARTED ON PORT 1935")
     );
+  }
+  stop() {
+    this.server.close();
   }
 }
 

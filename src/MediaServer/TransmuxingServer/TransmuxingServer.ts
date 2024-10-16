@@ -3,10 +3,10 @@ import * as essentials from "../Essentials";
 import TransMuxingSession from "./TransMuxingSession";
 
 class TransMuxingServer {
-  transSessions = new Map();
+  transSessions = new Map<string, TransMuxingSession>();
   constructor() {}
 
-  run() {
+  start() {
     try {
       if (!fs.existsSync("./media")) fs.mkdirSync("./media");
       // fs.accessSync("./media");
@@ -14,10 +14,13 @@ class TransMuxingServer {
       console.log(error);
     }
     console.log("TRANSMUXING SERVER RUNNING");
-    essentials.streamEvents.on("postPublish", this.onPostPublish.bind(this));
-  }
 
-  onPostPublish(id: string, streamPath: string) {
+    essentials.streamEvents.on("postStreamStart", this.onPostStreamStart.bind(this));
+    essentials.streamEvents.on("postStreamEnd", this.onPostStreamEnd.bind(this));
+  }
+  stop() {}
+
+  onPostStreamStart(id: string, streamPath: string) {
     let app_name = streamPath.split("/");
     let conf = {} as any;
     conf.mediaroot = "./media";
@@ -27,11 +30,15 @@ class TransMuxingServer {
     conf.app = app_name[1];
     conf.name = app_name[2];
     let session = new TransMuxingSession(conf);
-    session.on("end", () => {
-      this.transSessions.delete(id);
-    });
-    this.transSessions.set(id, this);
+    this.transSessions.set(id, session);
     session.run();
+  }
+  onPostStreamEnd(id: string) {
+    let session = this.transSessions.get(id);
+    if (session) {
+      session.end(id);
+      this.transSessions.delete(id);
+    }
   }
 }
 

@@ -4,6 +4,7 @@ type rtmpCodeType = {
 const rtmpCmdCode: rtmpCodeType = {
   releaseStream: ["transId", "cmdObj", "streamKey"],
   FCPublish: ["transId", "cmdObj", "streamKey"],
+  FCUnpublish: ["transId", "cmdObj", "streamName"],
   connect: ["transId", "cmdObj", "args"],
   createStream: ["transId", "cmdObj"],
   publish: ["transId", "cmdObj", "streamKey", "type"],
@@ -11,6 +12,7 @@ const rtmpCmdCode: rtmpCodeType = {
 };
 const rtmpDataCode: rtmpCodeType = {
   "@setDataFrame": ["method", "data"],
+  onMetaData: ["dataObj"],
 };
 
 type amf0DecodingRulesType = {
@@ -106,6 +108,7 @@ function decodeAmf0cmd(payload: Buffer) {
   type returnValueType = { len: number; value: string | any };
 
   let res: { [key: string]: string } = {};
+
   const cmd: returnValueType = amf0DecodingRules[payload.readUInt8(0)](payload);
   res.cmd = cmd.value;
   payload = payload.subarray(cmd.len);
@@ -114,8 +117,7 @@ function decodeAmf0cmd(payload: Buffer) {
     rtmpCmdCode[cmd.value].forEach((key) => {
       if (payload.length > 0) {
         // console.log(payload.length);
-        let v: returnValueType =
-          amf0DecodingRules[payload.readUint8(0)](payload);
+        let v: returnValueType = amf0DecodingRules[payload.readUint8(0)](payload);
         // console.log(payload.length);
 
         payload = payload.subarray(v.len);

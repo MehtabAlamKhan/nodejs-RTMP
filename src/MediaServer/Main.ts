@@ -1,17 +1,23 @@
 import RtmpServer from "./RtmpServer/RtmpServer";
-import TransMuxingServer from "./TransmuxingServer/TransmuxingServer";
+import TransMuxingServer from "./TransMuxingServer/TransMuxingServer";
 
 class Main {
   private rtmpserver: RtmpServer;
-  // private transMuxingServer: TransMuxingServer;
-  constructor() {
+  private transMuxingServer: TransMuxingServer;
+  private config: any;
+  constructor(config: any = {}) {
+    this.config = config;
     this.rtmpserver = new RtmpServer();
-    this.rtmpserver.run();
-
-    // this.transMuxingServer = new TransMuxingServer();
-    // this.transMuxingServer.run();
+    this.transMuxingServer = new TransMuxingServer();
   }
-  run() {}
+  start() {
+    this.rtmpserver.start();
+    this.transMuxingServer.start();
+  }
+  stop() {
+    this.rtmpserver.stop();
+    this.transMuxingServer.stop();
+  }
 }
 
 export default Main;
