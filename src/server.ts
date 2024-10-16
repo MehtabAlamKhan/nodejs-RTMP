@@ -1,4 +1,4 @@
 import Main from "./MediaServer/Main";
 
-let mediaServer = new Main();
-mediaServer.start();
+let streamingServer = new Main();
+streamingServer.start();
