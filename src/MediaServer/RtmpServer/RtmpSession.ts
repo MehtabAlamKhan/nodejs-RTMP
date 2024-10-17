@@ -370,7 +370,7 @@ class RtmpSession {
     let typeID = this.parsedPacket.header.typeID;
     let offset = this.parsedPacket.header.typeID === RTMP_TYPE_FLEX_MESSAGE ? 1 : 0;
     let payload = this.parsedPacket.payload.subarray(offset, offset + this.parsedPacket.header.bodyLength);
-    fs.appendFileSync(`./${this.port}.txt`, typeID.toString() + "\r\n");
+    // fs.appendFileSync(`./${this.port}.txt`, typeID.toString() + "\r\n");
 
     switch (typeID) {
       case 1: //RTMP_TYPE_SET_CHUNK_SIZE:
@@ -413,6 +413,7 @@ class RtmpSession {
   eventHandler() {}
 
   rtmpAudioHandler(data: Buffer) {
+    data = data.subarray(0, this.parsedPacket.header.bodyLength);
     let format = data[0] >> 4;
     let sampleRate = (data[0] >> 2) & 3;
     let sampleSize = (data[0] >> 1) & 1;
@@ -428,12 +429,14 @@ class RtmpSession {
     if ((format == 10 || format == 13) && data[1] == 0) {
       this.aacSequenceHeader = Buffer.alloc(data.length);
       data.copy(this.aacSequenceHeader);
-      this.audioProfileName = "LC";
-      this.audioSampleRate = 48000;
-      this.audioChannels = 2;
-    } else {
-      this.audioChannels = data[11];
-      this.audioSampleRate = 48000;
+      if (format == 10) {
+        this.audioProfileName = "LC";
+        this.audioSampleRate = 48000;
+        this.audioChannels = 2;
+      } else {
+        this.audioChannels = data[11];
+        this.audioSampleRate = 48000;
+      }
     }
 
     let packet = this.createRtmpPacket();
@@ -457,7 +460,7 @@ class RtmpSession {
           session.socket.cork();
         }
         rtmpChunks.writeUInt32LE(session.playerStreamId, 8);
-        session?.socket.write(rtmpChunks);
+        session.socket.write(rtmpChunks);
         session.cachedFrames++;
         if (session.cachedFrames >= 10) {
           process.nextTick(() => session.socket.uncork());
@@ -468,7 +471,7 @@ class RtmpSession {
   }
 
   rtmpVideoHandler(data: Buffer) {
-    // return;
+    data = data.subarray(0, this.parsedPacket.header.bodyLength);
     let isExHeader = ((data[0] >> 4) & 0b1000) !== 0;
     let frame_type = (data[0] >> 4) & 0b0111;
     let codec_id = data[0] & 0x0f;
@@ -884,16 +887,19 @@ class RtmpSession {
     let chunkBasicHeader3 = this.createChunkBasicHeader(RTMP_FMT_TYPE_3, header.chunkStreamID);
     let chunkMessageHeader = this.createChunkMessageHeader(header);
 
-    let chunkBasicHeaderLength = chunkBasicHeader.length;
-    let chunkMessageHeaderLength = chunkMessageHeader.length;
-    let headerSize = chunkBasicHeaderLength + chunkMessageHeaderLength; // + extended timestamp
-    let totalSize = headerSize + payloadSize;
+    let useExtendedTimestamp = header.timestamp >= 0xffffff;
+
+    let headerSize = chunkBasicHeader.length + chunkMessageHeader.length + (useExtendedTimestamp ? 4 : 0);
+    let totalSize = headerSize + payloadSize + Math.floor(payloadSize / chunkSize);
+    if (useExtendedTimestamp) {
+      totalSize += Math.floor(payloadSize / chunkSize) * 4;
+    }
 
     let buffer = Buffer.alloc(totalSize);
     chunkBasicHeader.copy(buffer, chunkOffset);
-    chunkOffset += chunkBasicHeaderLength;
+    chunkOffset += chunkBasicHeader.length;
     chunkMessageHeader.copy(buffer, chunkOffset);
-    chunkOffset += chunkMessageHeaderLength;
+    chunkOffset += chunkMessageHeader.length;
 
     while (payloadSize > 0) {
       if (payloadSize > chunkSize) {
