@@ -38,11 +38,11 @@ const RTMP_FMT_TYPE_1 = 1;
 const RTMP_FMT_TYPE_2 = 2;
 const RTMP_FMT_TYPE_3 = 3;
 
-const RTMP_PARSE_INIT = 0;
-const RTMP_PARSE_BASIC_HEADER = 1;
+const PARSE_LENGTH = 0;
+const PARSE_BASIC_HEADER = 1;
 const RTMP_PARSE_MESSAGE_HEADER = 2;
-const RTMP_PARSE_EXTENDED_TIMESTAMP = 3;
-const RTMP_PARSE_PAYLOAD = 4;
+const PARSE_EXT_TIMESTMP = 3;
+const PARSE_PAYLOAD = 4;
 
 const RTMP_TYPE_ID_DATA = 20;
 const RTMP_VERSION = 3;
@@ -241,7 +241,7 @@ class RtmpSession {
     let size = 0;
     while (offSet < totalLength) {
       switch (this.parsingState) {
-        case RTMP_PARSE_INIT:
+        case PARSE_LENGTH:
           this.rtmpHeaderBuffer[0] = data[offSet];
           let cid = data[offSet] & 63;
           offSet += 1;
@@ -254,17 +254,17 @@ class RtmpSession {
           } else {
             this.basicHeaderLength = 1;
           }
-          this.parsingState = RTMP_PARSE_BASIC_HEADER;
+          this.parsingState = PARSE_BASIC_HEADER;
           break;
-        case RTMP_PARSE_BASIC_HEADER:
+        case PARSE_BASIC_HEADER:
           size = RTMP_MSG_HEADER_SIZE[this.rtmpHeaderBuffer[0] >> 6];
           data.copy(this.rtmpHeaderBuffer, this.basicHeaderLength, offSet, offSet + size);
           offSet += size;
           this.rtmpPacketParse();
-          this.parsingState = RTMP_PARSE_EXTENDED_TIMESTAMP;
+          this.parsingState = PARSE_EXT_TIMESTMP;
           break;
 
-        case RTMP_PARSE_EXTENDED_TIMESTAMP:
+        case PARSE_EXT_TIMESTMP:
           size = RTMP_MSG_HEADER_SIZE[this.parsedPacket.header.fmtType] + this.basicHeaderLength;
           if (this.parsedPacket.header.timestamp === 0xffffff) {
             extendedTimestamp = this.rtmpHeaderBuffer.readUInt32BE(size);
@@ -281,10 +281,10 @@ class RtmpSession {
             }
             this.rtmpPacketAlloc();
           }
-          this.parsingState = RTMP_PARSE_PAYLOAD;
+          this.parsingState = PARSE_PAYLOAD;
           break;
 
-        case RTMP_PARSE_PAYLOAD:
+        case PARSE_PAYLOAD:
           size = Math.min(
             this.RTMP_IN_CHUNK_SIZE - (this.parsedPacket.bytes % this.RTMP_IN_CHUNK_SIZE),
             this.parsedPacket.header.bodyLength - this.parsedPacket.bytes
@@ -299,9 +299,9 @@ class RtmpSession {
           if (this.parsedPacket.bytes >= this.parsedPacket.header.bodyLength) {
             this.parsedPacket.bytes = 0;
             this.rtmpPayloadHandler();
-            this.parsingState = RTMP_PARSE_INIT;
+            this.parsingState = PARSE_LENGTH;
           } else if (this.parsedPacket.bytes % this.RTMP_IN_CHUNK_SIZE === 0) {
-            this.parsingState = RTMP_PARSE_INIT;
+            this.parsingState = PARSE_LENGTH;
           }
           break;
       }
