@@ -10,6 +10,7 @@ const rtmpCmdCode: rtmpCodeType = {
 const rtmpDataCode: rtmpCodeType = {
   onMetaData: ["dataObj"],
   "@setDataFrame": ["method", "dataObj"],
+  "|RtmpSampleAccess": ["bool1", "bool2"],
 };
 
 type amf0EncodingRulesType = {
@@ -51,11 +52,7 @@ function amf0encObject(obj: { [key: string]: number | boolean | string }) {
   for (var k in obj) {
     let value = obj[k];
     // console.log(k, value, amfType(value));
-    data = Buffer.concat([
-      data,
-      amf0encStringWithoutAmf(k),
-      amf0EncodingRules[amfType(value)](value),
-    ]);
+    data = Buffer.concat([data, amf0encStringWithoutAmf(k), amf0EncodingRules[amfType(value)](value)]);
   }
   let endOfObject = Buffer.alloc(1);
   endOfObject.writeUInt8(0x09);
@@ -90,10 +87,7 @@ function encodeAmf0cmd(options: any): Buffer {
 
   if (rtmpCmdCode[options.cmd]) {
     rtmpCmdCode[options.cmd].forEach((key: string) => {
-      data = Buffer.concat([
-        data,
-        amf0EncodingRules[amfType(options[key])](options[key]),
-      ]);
+      data = Buffer.concat([data, amf0EncodingRules[amfType(options[key])](options[key])]);
     });
   }
   return data;
@@ -105,10 +99,7 @@ function encodeAmf0data(options: any): Buffer {
     rtmpDataCode[options.cmd].forEach((key) => {
       console.log(options[key]);
 
-      data = Buffer.concat([
-        data,
-        amf0EncodingRules[amfType(options[key])](options[key]),
-      ]);
+      data = Buffer.concat([data, amf0EncodingRules[amfType(options[key])](options[key])]);
     });
   }
   return data;

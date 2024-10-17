@@ -116,10 +116,7 @@ function decodeAmf0cmd(payload: Buffer) {
   if (rtmpCmdCode[cmd.value]) {
     rtmpCmdCode[cmd.value].forEach((key) => {
       if (payload.length > 0) {
-        // console.log(payload.length);
         let v: returnValueType = amf0DecodingRules[payload.readUint8(0)](payload);
-        // console.log(payload.length);
-
         payload = payload.subarray(v.len);
         res[key] = v.value;
       }
