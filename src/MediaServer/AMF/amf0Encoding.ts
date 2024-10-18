@@ -20,7 +20,7 @@ type amf0EncodingRulesType = {
 const amf0EncodingRules: amf0EncodingRulesType = {
   string: amf0encString,
   integer: amf0encNumber,
-  //   double: amf0encNumber,
+  double: amf0encNumber,
   //   xml: amf0encXmlDoc,
   object: amf0encObject,
   //   array: amf0encArray,

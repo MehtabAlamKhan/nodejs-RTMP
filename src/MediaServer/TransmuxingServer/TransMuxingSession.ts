@@ -9,7 +9,7 @@ class TransMuxingSession extends EventEmitter {
   streamPath = "";
   rtmpPort = 0;
   app = "";
-  name = "";
+  username = "";
   ffmpegExe!: ChildProcessWithoutNullStreams;
   constructor(conf: any) {
     super();
@@ -18,12 +18,12 @@ class TransMuxingSession extends EventEmitter {
     this.streamPath = conf.streamPath;
     this.rtmpPort = conf.rtmpPort;
     this.app = conf.app;
-    this.name = conf.name;
+    this.username = conf.username;
   }
 
   run() {
-    let inPath = `rtmp://127.0.0.1:${this.rtmpPort}/${this.app}/${this.name}`;
-    let outPath = `${this.mediaroot}/${this.app}/${this.name}`;
+    let inPath = `rtmp://127.0.0.1:${this.rtmpPort}/${this.app}/${this.username}`;
+    let outPath = `${this.mediaroot}/${this.app}/${this.username}`;
 
     let hlsIndexFile = "index.m3u8";
     let hlsFlags = `[hls_time=2:hls_list_size=3:hls_flags=delete_segments]${outPath}/${hlsIndexFile}`;
@@ -32,7 +32,7 @@ class TransMuxingSession extends EventEmitter {
     let dashFlags = `[f=dash:window_size=3:extra_window_size=5]${outPath}/${dashIndexFile}'`;
 
     mkdirSync(outPath, { recursive: true });
-    let argv = `-y -i ${inPath} -c:v copy -c:a aac -ab 64k -ac 1 -ar 44100 -f tee -map 0:a? -map 0:v? ${hlsFlags}|${dashFlags}`;
+    let argv = `-y -i ${inPath} -c:v copy -c:a aac -ab 64k -ac 1 -ar 44100 -f tee -map 0:a? -map 0:v? ${hlsFlags}|`;
     let argvArray = argv.split(" ");
 
     this.ffmpegExe = spawn(this.ffmpegPath, argvArray);
@@ -41,11 +41,11 @@ class TransMuxingSession extends EventEmitter {
     });
 
     this.ffmpegExe.stdout.on("data", (data: Buffer) => {
-      // console.log("FF DATA OUT: ", data.toString("utf-8"));
+      console.log("FF DATA OUT: ", data.toString("utf-8"));
     });
 
     this.ffmpegExe.stderr.on("data", (data: Buffer) => {
-      // console.log("FF DATA ERR: ", data.toString("utf-8"));
+      console.log(data.toString("utf-8"));
     });
 
     this.ffmpegExe.on("close", (code) => {

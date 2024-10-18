@@ -28,7 +28,7 @@ class TransMuxingServer {
     conf.streamPath = streamPath;
     conf.rtmpPort = 1935;
     conf.app = app_name[1];
-    conf.name = app_name[2];
+    conf.username = app_name[2];
     let session = new TransMuxingSession(conf);
     this.transSessions.set(id, session);
     session.run();

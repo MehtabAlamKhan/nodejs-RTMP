@@ -35,6 +35,7 @@ const VideoCodecNames: { [key: number]: string } = {
   7: "H264",
   12: "H265",
   13: "AV1",
+  14: "VP09",
 };
 
 export { AudioCodeNames, AudioSampleRates, VideoCodecNames };
