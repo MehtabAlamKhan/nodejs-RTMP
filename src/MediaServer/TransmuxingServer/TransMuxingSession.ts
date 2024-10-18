@@ -45,7 +45,7 @@ class TransMuxingSession extends EventEmitter {
     });
 
     this.ffmpegExe.stderr.on("data", (data: Buffer) => {
-      console.log(data.toString("utf-8"));
+      // console.log(data.toString("utf-8"));
     });
 
     this.ffmpegExe.on("close", (code) => {

@@ -116,7 +116,7 @@ class RtmpSession {
   metaData: Buffer;
   firstVideoPacketRecieved: boolean;
   aacSequenceHeader: Buffer;
-  avcSequenceHeader: Buffer;
+  videoCodecSequenceHeader: Buffer;
   audioCodec: number;
   audioCodecName: string;
   audioProfileName: string;
@@ -164,7 +164,7 @@ class RtmpSession {
     this.audioSampleRate = 0;
     this.metaData = Buffer.alloc(0);
     this.aacSequenceHeader = Buffer.alloc(0);
-    this.avcSequenceHeader = Buffer.alloc(0);
+    this.videoCodecSequenceHeader = Buffer.alloc(0);
     this.audioCodec = 0;
     this.audioCodecName = "";
     this.audioProfileName = "";
@@ -507,8 +507,8 @@ class RtmpSession {
     if (codecId == 7 || codecId == 12 || codecId == 13 || codecId == 14) {
       //cache avc sequence header
       if (frameType == 1 && !this.firstVideoPacketRecieved) {
-        this.avcSequenceHeader = Buffer.alloc(data.length);
-        data.copy(this.avcSequenceHeader);
+        this.videoCodecSequenceHeader = Buffer.alloc(data.length);
+        data.copy(this.videoCodecSequenceHeader);
         //let info = AV.readAVCSpecificConfig(this.avcSequenceHeader);
         this.videoWidth = 3840;
         this.videoHeight = 2160;
@@ -720,7 +720,7 @@ class RtmpSession {
         packet.header.fmtType = RTMP_CHUNK_TYPE_0;
         packet.header.chunkStreamID = RTMP_CHANNEL_VIDEO;
         packet.header.typeID = RTMP_TYPE_VIDEO;
-        packet.payload = streamer.avcSequenceHeader;
+        packet.payload = streamer.videoCodecSequenceHeader;
         packet.header.bodyLength = packet.payload.length;
         packet.header.streamID = this.playerStreamId;
         let chunks = this.createRtmpChunks(packet);

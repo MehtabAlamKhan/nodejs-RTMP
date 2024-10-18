@@ -24,8 +24,6 @@ class HlsDashServer {
     this.http2.on("stream", (stream, headers) => {
       let reqPath = headers[":path"];
       let method = headers[":method"];
-      console.log(reqPath);
-      console.log(method);
       if (method && method == "OPTIONS") {
         stream.respond({ ":status": 204, ...this.corsHeaders });
         stream.end();
@@ -43,6 +41,10 @@ class HlsDashServer {
       } else {
         this.notFound(stream);
       }
+    });
+
+    this.http2.on("sessionError", (err) => {
+      console.log(err);
     });
   }
 
