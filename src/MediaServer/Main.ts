@@ -17,6 +17,14 @@ class Main {
     this.rtmpserver.start();
     this.transMuxingServer.start();
     this.hlsDashServer.start();
+
+    process.on("uncaughtException", (err) => {
+      console.log("uncaughtException", err);
+    });
+
+    process.on("SIGINT", () => {
+      process.exit();
+    });
   }
   stop() {
     this.rtmpserver.stop();

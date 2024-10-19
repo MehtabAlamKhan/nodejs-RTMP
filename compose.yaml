@@ -1,4 +1,3 @@
-version: '27.2.0'
 services:
   rtmp-server:
     image: rtmp:v1

@@ -373,7 +373,6 @@ class RtmpSession {
     let offset = this.parsedPacket.header.typeID === RTMP_TYPE_FLEX_MESSAGE ? 1 : 0;
     let payload = this.parsedPacket.payload.subarray(offset, offset + this.parsedPacket.header.bodyLength);
     // fs.appendFileSync(`./${this.port}.txt`, typeID.toString() + "\r\n");
-
     switch (typeID) {
       case 1: //RTMP_TYPE_SET_CHUNK_SIZE:
       // case 2: //RTMP_TYPE_ABORT
@@ -658,7 +657,7 @@ class RtmpSession {
     if (essentials.publishers.has(this.playerStreamPath)) {
       this.onStartPlay();
     } else {
-      console.log(this.playerStreamPath + "NOT FOUND");
+      console.log(this.playerStreamPath + " NOT FOUND");
     }
   }
   onDeleteStream(invokeMessage: any) {
@@ -936,7 +935,7 @@ class RtmpSession {
 
   stop() {
     essentials.streamSessions.delete(this.ID);
-    // essentials.publishers.delete(this.playerStreamPath);
+    essentials.publishers.delete(this.playerStreamPath);
     this.socket.destroy();
   }
 }

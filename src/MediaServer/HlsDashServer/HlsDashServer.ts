@@ -43,9 +43,9 @@ class HlsDashServer {
       }
     });
 
-    this.http2.on("sessionError", (err) => {
-      console.log(err);
-    });
+    this.http2.on("sessionError", (err) => {});
+
+    this.http2.on("error", (err) => {});
   }
 
   stop() {

@@ -38,20 +38,16 @@ class TransMuxingSession extends EventEmitter {
 
     this.ffmpegExe = spawn(this.ffmpegPath, argvArray);
     this.ffmpegExe.on("error", (e) => {
-      console.log("FF ERR: ", e);
+      // console.log("FF ERR: ", e);
     });
 
     this.ffmpegExe.stdout.on("data", (data: Buffer) => {
-      console.log("FF DATA OUT: ", data.toString("utf-8"));
+      // console.log("FF DATA OUT: ", data.toString("utf-8"));
     });
 
-    this.ffmpegExe.stderr.on("data", (data: Buffer) => {
-      // console.log(data.toString("utf-8"));
-    });
-
-    this.ffmpegExe.on("close", (code) => {
-      // console.log("TRANSMUX ENDED - ", code);
-    });
+    this.ffmpegExe.stderr.on("data", (data: Buffer) => {});
+    this.ffmpegExe.on("close", (code) => {});
+    this.ffmpegExe.on("exit", (code, signal) => {});
   }
   end(id: string) {
     this.ffmpegExe.kill();
