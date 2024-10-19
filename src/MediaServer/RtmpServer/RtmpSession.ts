@@ -7,7 +7,7 @@ import fs from "node:fs";
 import generateS0S1S2 from "./RtmpHandshake";
 import * as essentials from "../Essentials";
 import { generateID } from "../misc";
-import { AudioCodeNames, AudioSampleRates, VideoCodecNames } from "../AudioVideo";
+import { AudioCodeNames, AudioSampleRates, codecSpecificDetails, VideoCodecNames } from "../AudioVideo";
 
 // RTMP Handshake constants
 
@@ -505,11 +505,11 @@ class RtmpSession {
     }
 
     if (codecId == 7 || codecId == 12 || codecId == 13 || codecId == 14) {
-      //cache avc sequence header
+      //get codec specific details
       if (frameType == 1 && !this.firstVideoPacketRecieved) {
         this.videoCodecSequenceHeader = Buffer.alloc(data.length);
         data.copy(this.videoCodecSequenceHeader);
-        //let info = AV.readAVCSpecificConfig(this.avcSequenceHeader);
+        // let specs = codecSpecificDetails(this.videoCodecSequenceHeader, codecId);
         this.videoWidth = 3840;
         this.videoHeight = 2160;
         this.videoProfileName = "Main";
@@ -670,7 +670,7 @@ class RtmpSession {
     }
     essentials.streamEvents.emit("postStreamEnd", this.ID);
     essentials.streamSessions.delete(this.ID);
-    // essentials.publishers.delete(this.playerStreamPath);
+    essentials.publishers.delete(this.playerStreamPath);
   }
 
   respondPlay(sid: number) {

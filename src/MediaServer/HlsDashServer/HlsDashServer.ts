@@ -17,8 +17,8 @@ class HlsDashServer {
   }
 
   start() {
-    this.http2.listen(8443, () => {
-      console.log("HLS-DASH SERVER RUNNING ON PORT 8443");
+    this.http2.listen(443, () => {
+      console.log("HLS-DASH SERVER RUNNING ON PORT 443");
     });
 
     this.http2.on("stream", (stream, headers) => {

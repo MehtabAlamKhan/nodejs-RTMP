@@ -2,6 +2,7 @@ import { mkdir, mkdirSync } from "fs";
 import { EventEmitter } from "stream";
 import { ChildProcessWithoutNullStreams, spawn } from "child_process";
 import * as essentials from "../Essentials";
+import { getFfmpegVersion } from "../misc";
 
 class TransMuxingSession extends EventEmitter {
   mediaroot = "";

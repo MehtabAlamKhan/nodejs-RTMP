@@ -97,8 +97,6 @@ function encodeAmf0data(options: any): Buffer {
   let data = amf0EncodingRules[typeof options.cmd](options.cmd);
   if (rtmpDataCode[options.cmd]) {
     rtmpDataCode[options.cmd].forEach((key) => {
-      console.log(options[key]);
-
       data = Buffer.concat([data, amf0EncodingRules[amfType(options[key])](options[key])]);
     });
   }

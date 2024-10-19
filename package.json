@@ -4,7 +4,7 @@
   "main": "server.ts",
   "scripts": {
     "build": "npx tsc",
-    "start": "node  dist/server.js",
+    "start": "node dist/server.js",
     "watch": "tsc -w",
     "dev": "node --watch dist/server.js"
   },
@@ -15,5 +15,8 @@
   "devDependencies": {
     "@types/node": "^22.5.4",
     "typescript": "^5.6.2"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
   }
 }

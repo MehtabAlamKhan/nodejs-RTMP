@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import * as essentials from "../Essentials";
 import TransMuxingSession from "./TransMuxingSession";
+import dotenv from "dotenv";
+
+const envFile = process.env.ENV === "PROD" ? ".env.prod" : ".env.dev";
+dotenv.config({ path: envFile });
 
 class TransMuxingServer {
   transSessions = new Map<string, TransMuxingSession>();
@@ -24,14 +28,16 @@ class TransMuxingServer {
     let app_name = streamPath.split("/");
     let conf = {} as any;
     conf.mediaroot = "./media";
-    conf.ffmpeg = "C:/ffmpeg/bin/ffmpeg.exe";
+    conf.ffmpeg = process.env.FFMPEG_PATH;
     conf.streamPath = streamPath;
     conf.rtmpPort = 1935;
     conf.app = app_name[1];
     conf.username = app_name[2];
     let session = new TransMuxingSession(conf);
     this.transSessions.set(id, session);
-    session.run();
+    if (conf.ffmpeg) {
+      session.run();
+    }
   }
   onPostStreamEnd(id: string) {
     let session = this.transSessions.get(id);

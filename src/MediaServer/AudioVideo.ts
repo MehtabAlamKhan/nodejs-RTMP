@@ -38,4 +38,58 @@ const VideoCodecNames: { [key: number]: string } = {
   14: "VP09",
 };
 
-export { AudioCodeNames, AudioSampleRates, VideoCodecNames };
+function codecSpecificDetails(data: Buffer, codecId: number) {
+  if (codecId === 7) return readH264details(data);
+  if (codecId === 12) return readHEVCdetails(data);
+  if (codecId === 13) return readAV1details(data);
+  if (codecId === 14) return readVP9details(data);
+}
+
+function readH264details(data: Buffer) {
+  let bitOp = new BitOperations(data);
+  let offSet = 0;
+  let version = bitOp.read(offSet, 2);
+  offSet += 2;
+  let padding = bitOp.read(offSet++, 1);
+  let extension = bitOp.read(offSet++, 1);
+  let conSourceCount = bitOp.read(offSet, 4);
+  offSet += 4;
+  let marker = bitOp.read(offSet++, 1);
+  let paloadType = bitOp.read(offSet, 7);
+  offSet += 7;
+  let seqNo = bitOp.read(offSet, 16);
+  offSet += 16;
+  let timeStamp = bitOp.read(offSet, 32);
+  offSet += 32;
+}
+function readHEVCdetails(data: Buffer) {}
+function readAV1details(data: Buffer) {}
+function readVP9details(data: Buffer) {}
+
+class BitOperations {
+  totalLength: number;
+  buffer: Buffer;
+  constructor(data: Buffer) {
+    this.buffer = data;
+    this.totalLength = data.length;
+  }
+
+  read(startBit: number, len: number) {
+    let byteOffset = Math.floor(startBit / 8);
+    let bitOffSet = startBit % 8;
+    let value = 0;
+    for (let i = 0; i < len; i++) {
+      let byte = this.buffer[byteOffset];
+      let bit = (byte >> (7 - bitOffSet)) & 1;
+      value = (value << 1) | bit;
+
+      if (bitOffSet === 8) {
+        bitOffSet = 0;
+        byteOffset++;
+      }
+    }
+    return value;
+  }
+}
+
+export { AudioCodeNames, AudioSampleRates, VideoCodecNames, codecSpecificDetails };
