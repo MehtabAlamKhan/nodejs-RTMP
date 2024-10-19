@@ -205,6 +205,7 @@ class RtmpSession {
     this.socket.on("close", this.onSocketClose.bind(this));
     this.socket.on("error", this.onSocketError.bind(this));
     this.socket.on("timeout", this.onSocketTimeout.bind(this));
+    this.socket.setTimeout(25000);
   }
 
   onSocketData(data: Buffer) {
@@ -642,6 +643,16 @@ class RtmpSession {
     //Do authentication with stream key and stream path
     let streamPath = "/" + this.appName + "/" + invokeMessage.streamKey.split("?")[0];
 
+    if (essentials.publishers.has(streamPath)) {
+      this.sendStatusMessage(
+        this.publishStreamId,
+        "error",
+        "NetStream.Publish.BadName",
+        "Stream already publishing"
+      );
+      this.stop();
+    }
+
     essentials.publishers.set(streamPath, this.ID);
     this.playerStreamPath = streamPath;
     this.respondPublish(this.publishStreamId, "status", "NetStream.Publish.Start", `${streamPath} is published.`);
@@ -666,6 +677,7 @@ class RtmpSession {
       if (session) {
         session.sendStreamStatus(STREAM_END, session.playerStreamId);
       }
+      essentials.streamSessions.delete(playerID);
     }
     essentials.streamEvents.emit("postStreamEnd", this.ID);
     essentials.streamSessions.delete(this.ID);
