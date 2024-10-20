@@ -4,9 +4,9 @@
   "main": "server.ts",
   "scripts": {
     "build": "npx tsc",
-    "start": "node dist/server.js",
+    "start": "set ENV=PROD && node dist/server.js",
     "watch": "tsc -w",
-    "dev": "node --watch dist/server.js"
+    "dev": "set ENV=DEV && node --watch dist/server.js"
   },
   "keywords": [],
   "author": "",

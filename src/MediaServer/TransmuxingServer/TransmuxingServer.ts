@@ -4,6 +4,7 @@ import TransMuxingSession from "./TransMuxingSession";
 import dotenv from "dotenv";
 
 const envFile = process.env.ENV === "PROD" ? ".env.prod" : ".env.dev";
+console.log(process.env.ENV + " ENVIRONMENT");
 dotenv.config({ path: envFile });
 
 class TransMuxingServer {

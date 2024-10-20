@@ -1,3 +1,4 @@
+import "../Logger";
 import net from "net";
 import { Buffer } from "buffer";
 import Crypto from "node:crypto";
@@ -80,6 +81,8 @@ const RTMP_TYPE_SHARED_OBJECT = 19; // AMF0
 const RTMP_TYPE_FLEX_MESSAGE = 17; // AMF3
 const RTMP_TYPE_INVOKE = 20; // AMF0
 
+const RTMP_TYPE_EVENT = 4;
+
 const STREAM_BEGIN = 0x00;
 const STREAM_END = 0x01;
 
@@ -137,6 +140,12 @@ class RtmpSession {
   rtmpHeaderBuffer: Buffer;
   basicHeaderLength: number;
   parsingState: number;
+  connectCmdObj: {};
+  connectTime: Date;
+  objectEncoding: number;
+  startTimestamp: number;
+  pingInterval!: NodeJS.Timeout;
+  pingTimeMs: number;
 
   constructor(socket: net.Socket) {
     this.clientId = socket.remoteAddress + ":" + socket.remotePort;
@@ -153,6 +162,11 @@ class RtmpSession {
     this.bodyLength = 0;
     this.typeId = 0;
     this.remaining = 0;
+    this.connectCmdObj = {};
+    this.objectEncoding = 0;
+    this.connectTime = new Date();
+    this.startTimestamp = Date.now();
+    this.pingTimeMs = 3000;
     this.rtmpHeaderBuffer = Buffer.alloc(18);
     this.basicHeaderLength = 0;
     this.firstVideoPacketRecieved = false;
@@ -571,6 +585,8 @@ class RtmpSession {
       case "connect":
         this.onConnect(invokeMessage);
         break;
+      case "releaseStream":
+        break;
       case "createStream":
         this.onCreateStream(invokeMessage);
         break;
@@ -629,6 +645,15 @@ class RtmpSession {
 
   onConnect(invokeMessage: any) {
     this.appName = invokeMessage.cmdObj.app;
+    essentials.streamEvents.emit("connect", invokeMessage);
+    this.connectCmdObj = invokeMessage.cmdObj;
+    this.appName = invokeMessage.cmdObj.app;
+    this.objectEncoding = invokeMessage.cmdObj.objectEncoding != null ? invokeMessage.cmdObj.objectEncoding : 0;
+    this.connectTime = new Date();
+    this.startTimestamp = Date.now();
+    this.pingInterval = setInterval(() => {
+      this.sendPingRequest();
+    }, this.pingTimeMs);
     this.sendWindowACK(5000000);
     this.setPeerBandwidth(5000000, 2);
     this.setChunkSize(this.RTMP_OUT_CHUNK_SIZE);
@@ -642,6 +667,7 @@ class RtmpSession {
   onPublish(invokeMessage: any) {
     //Do authentication with stream key and stream path
     let streamPath = "/" + this.appName + "/" + invokeMessage.streamKey.split("?")[0];
+    this.publishStreamId = this.parsedPacket.header.streamID;
 
     if (essentials.publishers.has(streamPath)) {
       this.sendStatusMessage(
@@ -753,12 +779,12 @@ class RtmpSession {
       bool1: false,
       bool2: false,
     };
-    this.encodeAndRespond(sid, opt);
+    this.encodeAndRespondInvokeMsg(sid, opt);
   }
 
-  sendStreamStatus(st: number, id: number) {
-    let buffer = Buffer.from("020000000000060400000000000000000000", "hex");
-    buffer.writeUInt16BE(st, 12);
+  sendStreamStatus(status: number, id: number) {
+    let buffer = Buffer.from([2, 0, 0, 0, 0, 0, 6, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    buffer.writeUInt16BE(status, 12);
     buffer.writeUInt32BE(id, 14);
     this.socket.write(buffer);
   }
@@ -774,7 +800,26 @@ class RtmpSession {
         description: description,
       },
     };
-    this.encodeAndRespond(sid, opt);
+    this.encodeAndRespondInvokeMsg(sid, opt);
+  }
+  sendPingRequest() {
+    let currentTimestamp = Date.now() - this.startTimestamp;
+    let packet = this.createRtmpPacket();
+    packet.header.fmtType = RTMP_CHUNK_TYPE_0;
+    packet.header.chunkStreamID = RTMP_CHANNEL_PROTOCOL;
+    packet.header.typeID = RTMP_TYPE_EVENT;
+    packet.header.timestamp = currentTimestamp;
+    packet.payload = Buffer.from([
+      0,
+      6,
+      (currentTimestamp >> 24) & 0xff,
+      (currentTimestamp >> 16) & 0xff,
+      (currentTimestamp >> 8) & 0xff,
+      currentTimestamp & 0xff,
+    ]);
+    packet.header.bodyLength = packet.payload.length;
+    let chunks = this.createRtmpChunks(packet);
+    this.socket.write(chunks);
   }
   sendACK(size: number) {
     let buffer = Buffer.from([2, 0, 0, 0, 0, 0, 4, 3, 0, 0, 0, 0, 0, 0, 0, 0]);
@@ -813,16 +858,25 @@ class RtmpSession {
         objectEncoding: invokeMessage.cmdObj.objectEncoding || 0,
       },
     };
-    this.encodeAndRespond(0, resOpt);
+    this.encodeAndRespondInvokeMsg(0, resOpt);
   }
   respondCreateStream(tid: number) {
+    let assignableStreamId;
+    if (essentials.availableStreamIDs.nextReusableStreamID != null) {
+      assignableStreamId = essentials.availableStreamIDs.nextReusableStreamID;
+      essentials.availableStreamIDs.nextReusableStreamID = null;
+    } else {
+      assignableStreamId = essentials.availableStreamIDs.nextAvailableStreamID;
+      essentials.availableStreamIDs.nextAvailableStreamID++;
+    }
+    // essentials.ne
     let resOpt = {
       cmd: "_result",
       transId: tid,
       cmdObj: null,
-      info: 1,
+      info: assignableStreamId,
     };
-    this.encodeAndRespond(0, resOpt);
+    this.encodeAndRespondInvokeMsg(0, resOpt);
   }
   respondPublish(sid: number, level: string, code: string, description: string) {
     let resOpt = {
@@ -835,10 +889,10 @@ class RtmpSession {
         description: description,
       },
     };
-    this.encodeAndRespond(0, resOpt);
+    this.encodeAndRespondInvokeMsg(0, resOpt);
   }
 
-  encodeAndRespond(sid: number, resOpt: any) {
+  encodeAndRespondInvokeMsg(sid: number, resOpt: any) {
     let resRtmpPacket = this.createRtmpPacket();
     resRtmpPacket.header.fmtType = RTMP_FMT_TYPE_0;
     resRtmpPacket.header.chunkStreamID = RTMP_CHANNEL_INVOKE;

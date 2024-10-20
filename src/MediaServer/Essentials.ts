@@ -4,6 +4,7 @@ import RtmpSession from "./RtmpServer/RtmpSession";
 type streamEventsTypes = {
   postStreamStart: (id: string, streamPath: string) => void;
   postStreamEnd: (id: string) => void;
+  connect: (invokeMessage: {}) => void;
 };
 
 class streamCustomEvens extends EventEmitter {
@@ -17,6 +18,8 @@ class streamCustomEvens extends EventEmitter {
 
 let streamEvents = new streamCustomEvens();
 let publishers = new Map();
+let streamIDs = new Set();
+let availableStreamIDs = { nextAvailableStreamID: 1, nextReusableStreamID: null as number | null };
 let streamSessions = new Map<string, RtmpSession>();
 
-export { streamEvents, streamSessions, publishers };
+export { streamEvents, streamSessions, publishers, streamIDs, availableStreamIDs };
