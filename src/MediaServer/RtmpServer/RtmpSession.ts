@@ -869,7 +869,7 @@ class RtmpSession {
       assignableStreamId = essentials.availableStreamIDs.nextAvailableStreamID;
       essentials.availableStreamIDs.nextAvailableStreamID++;
     }
-    // essentials.ne
+
     let resOpt = {
       cmd: "_result",
       transId: tid,
