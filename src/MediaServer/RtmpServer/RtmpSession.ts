@@ -129,10 +129,10 @@ class RtmpSession {
   videoProfileName: string;
   videoLevel: number;
   parsedPacket: RTMP_PacketType;
-  publishStreamId: number;
   appName: string;
-  playerStreamPath: string;
   playerStreamId: number;
+  publishStreamId: number;
+  publishStreamPath: string;
   players: Set<string>;
   cachedFrames: number;
   streamCache: Set<Buffer>;
@@ -146,6 +146,7 @@ class RtmpSession {
   startTimestamp: number;
   pingInterval!: NodeJS.Timeout;
   pingTimeMs: number;
+  muxer: boolean;
 
   constructor(socket: net.Socket) {
     this.clientId = socket.remoteAddress + ":" + socket.remotePort;
@@ -155,6 +156,7 @@ class RtmpSession {
     this.RTMP_IN_CHUNK_SIZE = 128;
     this.RTMP_OUT_CHUNK_SIZE = 60000;
     this.ID = generateID();
+    this.muxer = false;
     this.socket = socket;
     this.ackSize = 0;
     this.inAckSize = 0;
@@ -204,7 +206,7 @@ class RtmpSession {
     };
     this.publishStreamId = 0;
     this.appName = "";
-    this.playerStreamPath = "";
+    this.publishStreamPath = "";
     this.playerStreamId = 0;
 
     this.players = new Set();
@@ -602,6 +604,14 @@ class RtmpSession {
       case "play":
         this.onPlay(invokeMessage);
         break;
+      case "pause":
+        break;
+      case "FCUnpublish":
+        break;
+      case "deleteStream":
+        break;
+      case "closeStream":
+        break;
     }
   }
 
@@ -680,34 +690,64 @@ class RtmpSession {
     }
 
     essentials.publishers.set(streamPath, this.ID);
-    this.playerStreamPath = streamPath;
-    this.respondPublish(this.publishStreamId, "status", "NetStream.Publish.Start", `${streamPath} is published.`);
+    this.publishStreamPath = streamPath;
+    this.sendStatusMessage(
+      this.publishStreamId,
+      "status",
+      "NetStream.Publish.Start",
+      `${streamPath} is published.`
+    );
 
     essentials.streamEvents.emit("postStreamStart", this.ID, streamPath);
   }
 
   onPlay(invokeMessage: any) {
-    this.playerStreamPath = "/" + this.appName + "/" + invokeMessage.streamName;
+    this.publishStreamPath = "/" + this.appName + "/" + invokeMessage.streamName;
     this.playerStreamId = this.parsedPacket.header.streamID;
-
+    this.muxer = true;
     this.respondPlay(this.playerStreamId);
-    if (essentials.publishers.has(this.playerStreamPath)) {
+    if (essentials.publishers.has(this.publishStreamPath)) {
       this.onStartPlay();
     } else {
-      console.log(this.playerStreamPath + " NOT FOUND");
+      console.log(this.publishStreamPath + " NOT FOUND");
     }
   }
   onDeleteStream(invokeMessage: any) {
-    for (let playerID of this.players) {
-      let session = essentials.streamSessions.get(playerID);
-      if (session) {
-        session.sendStreamStatus(STREAM_END, session.playerStreamId);
+    if (invokeMessage.streamId == this.playerStreamId) {
+      //its the Muxer/Transcoder
+      //remove the muxer/transcoder from publishers players
+      let publisherId = essentials.publishers.get(this.publishStreamPath);
+      if (publisherId) {
+        let session = essentials.publishers.get(publisherId);
+        session?.players.delete(this.ID);
+        essentials.streamSessions.delete(this.ID);
+        console.log("MUXING DONE FOR STREAMPATH : " + session.publishStreamPath);
       }
-      essentials.streamSessions.delete(playerID);
     }
-    essentials.streamEvents.emit("postStreamEnd", this.ID);
-    essentials.streamSessions.delete(this.ID);
-    essentials.publishers.delete(this.playerStreamPath);
+    if (invokeMessage.streamId == this.publishStreamId) {
+      //its the streamer
+      this.sendStatusMessage(
+        this.publishStreamId,
+        "status",
+        "NetStream.Unpublish.Success",
+        `${this.publishStreamPath} is now unpublished.`
+      );
+      for (let playerID of this.players) {
+        let playerSession = essentials.streamSessions.get(playerID);
+        if (playerSession) {
+          playerSession.sendStatusMessage(
+            playerSession.playerStreamId,
+            "status",
+            "NetStream.Play.UnpublishNotify",
+            "stream is now unpublished."
+          );
+        }
+        essentials.streamSessions.delete(playerID);
+      }
+      essentials.streamSessions.delete(this.ID);
+      essentials.publishers.delete(this.publishStreamPath);
+      essentials.streamEvents.emit("postStreamEnd", this.ID);
+    }
   }
 
   respondPlay(sid: number) {
@@ -717,7 +757,7 @@ class RtmpSession {
     this.sendRtmpSampleAccess(sid);
   }
   onStartPlay() {
-    let streamerId = essentials.publishers.get(this.playerStreamPath);
+    let streamerId = essentials.publishers.get(this.publishStreamPath);
     let streamer = essentials.streamSessions.get(streamerId);
     if (streamer) {
       let players = streamer.players;
@@ -869,7 +909,6 @@ class RtmpSession {
       assignableStreamId = essentials.availableStreamIDs.nextAvailableStreamID;
       essentials.availableStreamIDs.nextAvailableStreamID++;
     }
-
     let resOpt = {
       cmd: "_result",
       transId: tid,
@@ -1000,8 +1039,16 @@ class RtmpSession {
   }
 
   stop() {
+    if (this.muxer) {
+      let publisherID = essentials.publishers.get(this.publishStreamPath);
+      if (publisherID) {
+        let session = essentials.streamSessions.get(publisherID);
+        session?.socket.destroy();
+      }
+    } else {
+    }
     essentials.streamSessions.delete(this.ID);
-    essentials.publishers.delete(this.playerStreamPath);
+    essentials.publishers.delete(this.publishStreamPath);
     this.socket.destroy();
   }
 }

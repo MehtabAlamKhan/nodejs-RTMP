@@ -1,5 +1,6 @@
 import Net from "node:net";
 import RtmpSession from "./RtmpSession";
+import os from "node:os";
 
 class RtmpServer {
   server: Net.Server;
@@ -10,9 +11,7 @@ class RtmpServer {
     });
   }
   start() {
-    this.server.listen(1935, () =>
-      console.log("RTMP SERVER STARTED ON PORT 1935")
-    );
+    this.server.listen(1935, () => console.log("RTMP SERVER STARTED ON PORT 1935"));
   }
   stop() {
     this.server.close();

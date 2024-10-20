@@ -9,6 +9,8 @@ const rtmpCmdCode: rtmpCodeType = {
   createStream: ["transId", "cmdObj"],
   publish: ["transId", "cmdObj", "streamKey", "type"],
   play: ["transId", "cmdObj", "streamName", "start", "duration", "reset"],
+  pause: ["transId", "cmdObj", "pause", "ms"],
+  deleteStream: ["transId", "cmdObj", "streamId"],
 };
 const rtmpDataCode: rtmpCodeType = {
   "@setDataFrame": ["method", "data"],
