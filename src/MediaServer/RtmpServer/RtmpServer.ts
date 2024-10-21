@@ -1,12 +1,11 @@
 import Net from "node:net";
 import RtmpSession from "./RtmpSession";
-import os from "node:os";
 
 class RtmpServer {
   server: Net.Server;
   constructor() {
     this.server = Net.createServer((socket) => {
-      const session = new RtmpSession(socket);
+      let session: RtmpSession | null = new RtmpSession(socket);
       session.start();
     });
   }

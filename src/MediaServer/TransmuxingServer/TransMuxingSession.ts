@@ -27,26 +27,32 @@ class TransMuxingSession extends EventEmitter {
     let outPath = `${this.mediaroot}/${this.app}/${this.username}`;
 
     let hlsIndexFile = "index.m3u8";
-    let hlsFlags = `[hls_time=2:hls_list_size=3:hls_flags=delete_segments]${outPath}/${hlsIndexFile}`;
+    let hlsFlags = `[hls_time=5:hls_list_size=3:hls_flags=delete_segments]${outPath}/${hlsIndexFile}`;
 
     let dashIndexFile = "index.mpd";
     let dashFlags = `[f=dash:window_size=3:extra_window_size=5]${outPath}/${dashIndexFile}'`;
 
     mkdirSync(outPath, { recursive: true });
-    let argv = `-y -i ${inPath} -c:v copy -c:a aac -ab 64k -ac 1 -ar 44100 -f tee -map 0:a? -map 0:v? ${hlsFlags}|`;
+    // let argv = `-y -i ${inPath} -c:v copy -c:a aac -f tee -map 0:a? -map 0:v? ${hlsFlags}|`;
+
+    let argv = `-y -i ${inPath} -c:v copy -c:a aac -b:a 128k -ac 1 -ar 44100 -f tee -map 0:a? -map 0:v? ${hlsFlags}|`;
     let argvArray = argv.split(" ");
 
     this.ffmpegExe = spawn(this.ffmpegPath, argvArray);
     this.ffmpegExe.on("error", (e) => {
-      // console.log("FF ERR: ", e);
+      console.log("FF ERR: ", e);
     });
 
     this.ffmpegExe.stdout.on("data", (data: Buffer) => {
-      // console.log("FF DATA OUT: ", data.toString("utf-8"));
+      console.log("FF DATA OUT: ", data.toString("utf-8"));
     });
 
-    this.ffmpegExe.stderr.on("data", (data: Buffer) => {});
-    this.ffmpegExe.on("close", (code) => {});
+    this.ffmpegExe.stderr.on("data", (data: Buffer) => {
+      console.log(data.toString("utf-8"));
+    });
+    this.ffmpegExe.on("close", (code) => {
+      console.log("CLOSED");
+    });
     this.ffmpegExe.on("exit", (code, signal) => {});
   }
   end(id: string) {
