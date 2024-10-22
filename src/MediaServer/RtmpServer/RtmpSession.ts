@@ -1,14 +1,13 @@
 import "../Logger";
 import net from "net";
 import { Buffer } from "buffer";
-import Crypto from "node:crypto";
 import * as AMFd from "../AMF/amf0Decoding";
 import * as AMFe from "../AMF/amf0Encoding";
 import fs from "node:fs";
 import generateS0S1S2 from "./RtmpHandshake";
 import * as essentials from "../Essentials";
 import { generateID } from "../misc";
-import { AudioCodeNames, AudioSampleRates, codecSpecificDetails, VideoCodecNames } from "../AudioVideo";
+import { AudioCodeNames, AudioSampleRates, codecSpecificConfiguration, VideoCodecNames } from "../AudioVideo";
 
 // RTMP Handshake constants
 
@@ -522,7 +521,7 @@ class RtmpSession {
         } else {
           this.videoCodecSequenceHeader = data.subarray(5);
         }
-        let specs = codecSpecificDetails(this.videoCodecSequenceHeader, codecId);
+        let specs = codecSpecificConfiguration(this.videoCodecSequenceHeader, codecId);
         if (specs) {
           this.videoWidth = specs.width;
           this.videoHeight = specs.height;

@@ -54,7 +54,7 @@ const H264Profiles: { [key: number]: string } = {
   118: "Multiview High",
 };
 
-function codecSpecificDetails(data: Buffer, codecId: number) {
+function codecSpecificConfiguration(data: Buffer, codecId: number) {
   if (codecId === 7) return readH264details(data);
   if (codecId === 12) return readHEVCdetails(data);
   if (codecId === 13) return readAV1details(data);
@@ -72,13 +72,13 @@ function readH264details(data: Buffer) {
   let bitOp = new BitOperations(data);
   let offSet = 0; //represent bits
 
+  //skip 5 bytes since it indicates the begining of nal unit
+  bitOp.read(true, 40);
+
   // //NAL header 8 bits
   // let fobiddenZeroBit = bitOp.read(true, 1);
   // let nalRefIdc = bitOp.read(true, 2);
   // let nalType = bitOp.read(true, 5);
-
-  //skip 5 bytes since it indicates the begining of nal unit
-  bitOp.read(true, 40);
 
   let prfileIdc = bitOp.read(true, 8);
   let constFlags = bitOp.read(true, 8);
@@ -199,7 +199,9 @@ function readH264details(data: Buffer) {
   return details;
 }
 
-function readHEVCdetails(data: Buffer) {}
+function readHEVCdetails(data: Buffer) {
+  console.log(data);
+}
 function readAV1details(data: Buffer) {}
 function readVP9details(data: Buffer) {}
 
@@ -247,4 +249,4 @@ class BitOperations {
   }
 }
 
-export { AudioCodeNames, AudioSampleRates, VideoCodecNames, codecSpecificDetails };
+export { AudioCodeNames, AudioSampleRates, VideoCodecNames, codecSpecificConfiguration };
