@@ -523,10 +523,10 @@ class RtmpSession {
         }
         let specs = codecSpecificConfiguration(this.videoCodecSequenceHeader, codecId);
         if (specs) {
-          this.videoWidth = specs.width;
-          this.videoHeight = specs.height;
-          this.videoProfileName = specs.profile;
-          this.videoLevel = specs.level;
+          this.videoWidth = specs.width as number;
+          this.videoHeight = specs.height as number;
+          this.videoProfileName = specs.profile as string;
+          this.videoLevel = specs.level as number;
         }
 
         // this.videoWidth = 3840;
