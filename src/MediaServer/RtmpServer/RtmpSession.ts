@@ -528,16 +528,18 @@ class RtmpSession {
           this.videoProfileName = specs.profile as string;
           this.videoLevel = specs.level as number;
         }
-
-        // this.videoWidth = 3840;
-        // this.videoHeight = 2160;
-        // this.videoProfileName = "";
-        // this.videoLevel = 0;
       }
     }
 
     if (videoPacketType == FRAME_TYPE_CODED_FRAMES) {
-      this.videoCodedData = data.subarray(5);
+      // this.videoCodedData = data.subarray(5);
+      // let specs = codecSpecificConfiguration(this.videoCodedData, codecId);
+      // if (specs) {
+      //   this.videoWidth = specs.width as number;
+      //   this.videoHeight = specs.height as number;
+      //   this.videoProfileName = specs.profile as string;
+      //   this.videoLevel = specs.level as number;
+      // }
     }
     if (videoPacketType == FRAME_TYPE_SEQUENCE_END) {
       //end of seuquence

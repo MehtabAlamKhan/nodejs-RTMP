@@ -86,224 +86,212 @@ const H265Profiles: { [key: number]: string } = {
   "30": "Reserved for future use",
   "31": "High Profile",
 };
+const AV1Profiles = ["Main", "High", "Pro"];
 
 function codecSpecificConfiguration(data: Buffer, codecId: number) {
-  if (codecId === 7) return readH264details(data);
-  if (codecId === 12) return readHEVCdetails(data);
-  if (codecId === 13) return readAV1details(data);
-  if (codecId === 14) return readVP9details(data);
+  if (codecId === 7) return H264DecoderConfigurationRecord(data);
+  if (codecId === 12) return HEVCDecoderConfigurationRecord(data);
+  if (codecId === 13) return AV1DecoderConfigurationRecord(data);
+  if (codecId === 14) return VP9CodecConfigurationRecord(data);
 }
 
-function readH264details(data: Buffer) {
-  let details = {
+function H264DecoderConfigurationRecord(data: Buffer) {
+  const reader = new BitReader(data);
+  const details = {
     level: 0,
     height: 0,
     refFrames: 0,
     width: 0,
     profile: "",
   };
-  let bitOp = new BitOperations(data);
-  let offSet = 0; //represent bits
+  // Skip 5 bytes (40 bits)
+  reader.readBits(40);
 
-  //skip 5 bytes since it indicates the begining of nal unit
-  bitOp.read(true, 40);
+  // Read NAL header (8 bits)
+  // const forbiddenZeroBit = reader.readBits(1);
+  // const nalRefIdc = reader.readBits(2);
+  // const nalType = reader.readBits(5);
 
-  // //NAL header 8 bits
-  // let fobiddenZeroBit = bitOp.read(true, 1);
-  // let nalRefIdc = bitOp.read(true, 2);
-  // let nalType = bitOp.read(true, 5);
+  const profileIdc = reader.readBits(8);
+  const constFlags = reader.readBits(8);
+  const levelIdc = reader.readBits(8);
+  const nalUnit = reader.readBits(8);
+  const numberOfSpsUnits = reader.readBits(8) & 31;
 
-  let prfileIdc = bitOp.read(true, 8);
-  let constFlags = bitOp.read(true, 8);
-  let levelIdc = bitOp.read(true, 8);
-  let nalUnit = bitOp.read(true, 8);
-  let numberOfSpsUnits = bitOp.read(true, 8) & 31;
-
-  //atleast 1 unit should present to decode details
-  if (numberOfSpsUnits == 0) {
-    return details;
-  }
-  /* nal size */
-  bitOp.read(true, 16);
-
-  //if not 103 then no SEI
-  if (bitOp.read(true, 8) != 0x67) {
+  // At least one unit should be present to decode details
+  if (numberOfSpsUnits === 0) {
     return details;
   }
 
-  //profileIdc, flags, levelIdc
-  let profileIdc = bitOp.read(true, 8);
-  details.profile = H264Profiles[profileIdc];
-  bitOp.read(true, 8);
-  details.level = bitOp.read(true, 8);
+  // NAL size (16 bits)
+  reader.readBits(16);
 
-  /* SPS id */
-  bitOp.read_golomb();
+  // If not 0x67 (103) then no SEI
+  if (reader.readBits(8) !== 0x67) {
+    return details;
+  }
+
+  // Read profileIdc, flags, levelIdc
+  const profileIdcVal = reader.readBits(8);
+  details.profile = H264Profiles[profileIdcVal];
+  reader.readBits(8);
+  details.level = reader.readBits(8) / 10.0;
+
+  // Read SPS id
+  reader.readUE();
 
   if (
-    profileIdc == 100 ||
-    profileIdc == 110 ||
-    profileIdc == 122 ||
-    profileIdc == 244 ||
-    profileIdc == 44 ||
-    profileIdc == 83 ||
-    profileIdc == 86 ||
-    profileIdc == 118
+    profileIdcVal === 100 ||
+    profileIdcVal === 110 ||
+    profileIdcVal === 122 ||
+    profileIdcVal === 244 ||
+    profileIdcVal === 44 ||
+    profileIdcVal === 83 ||
+    profileIdcVal === 86 ||
+    profileIdcVal === 118
   ) {
-    let chromaFmtIdc = bitOp.read_golomb();
-
-    if (chromaFmtIdc == 3) {
-      bitOp.read(true, 1);
+    const chromaFmtIdc = reader.readUE();
+    if (chromaFmtIdc === 3) {
+      reader.readBits(1);
     }
-
-    /* bit depth luma - 8 */
-    bitOp.read_golomb();
-    /* bit depth chroma - 8 */
-    bitOp.read_golomb();
-    /* qpprime y zero transform bypass */
-    bitOp.read(true, 1);
-    /* seq scaling matrix present */
-    if (bitOp.read(true, 1)) {
-      for (let n = 0; n < (chromaFmtIdc != 3 ? 8 : 12); n++) {
-        /* seq scaling list present */
-        if (bitOp.read(true, 1)) {
+    // Bit depth luma - 8
+    reader.readUE();
+    // Bit depth chroma - 8
+    reader.readUE();
+    // Qpprime y zero transform bypass
+    reader.readBits(1);
+    // Seq scaling matrix present
+    if (reader.readBits(1)) {
+      for (let n = 0; n < (chromaFmtIdc !== 3 ? 8 : 12); n++) {
+        // Seq scaling list present
+        if (reader.readBits(1)) {
+          // Skip scaling list
         }
       }
     }
   }
 
-  /* log2 max frame num */
-  bitOp.read_golomb();
+  // Log2 max frame num
+  reader.readUE();
 
-  /* pic order cnt type */
-  switch (bitOp.read_golomb()) {
+  // Pic order cnt type
+  switch (reader.readUE()) {
     case 0:
-      /* max pic order cnt */
-      bitOp.read_golomb();
+      // Max pic order cnt
+      reader.readUE();
       break;
-
     case 1:
-      /* delta pic order alwys zero */
-      bitOp.read(true, 1);
-      /* offset for non-ref pic */
-      bitOp.read_golomb();
-      /* offset for top to bottom field */
-      bitOp.read_golomb();
-      /* num ref frames in pic order */
-      let noOfRefFrames = bitOp.read_golomb();
-
+      // Delta pic order always zero
+      reader.readBits(1);
+      // Offset for non-ref pic
+      reader.readUE();
+      // Offset for top to bottom field
+      reader.readUE();
+      // Num ref frames in pic order
+      const noOfRefFrames = reader.readUE();
       for (let n = 0; n < noOfRefFrames; n++) {
-        /* offset for ref frame */
-        bitOp.read_golomb();
+        // Offset for ref frame
+        reader.readUE();
       }
+      break;
   }
 
-  /* num ref frames */
-  details.refFrames = bitOp.read_golomb();
+  // Num ref frames
+  details.refFrames = reader.readUE();
 
-  /* gaps in frame num allowed */
-  bitOp.read(true, 1);
-  let width = bitOp.read_golomb();
-  let height = bitOp.read_golomb();
-  let frame_mbs_only = bitOp.read(true, 1);
+  // Gaps in frame num allowed
+  reader.readBits(1);
 
-  if (!frame_mbs_only) {
-    /* mbs adaprive frame field */
-    bitOp.read(true, 1);
+  const width = reader.readGolomb();
+  const height = reader.readGolomb();
+  const frameMbsOnly = reader.readBits(1);
+
+  if (!frameMbsOnly) {
+    // Mbs adaptive frame field
+    reader.readBits(1);
   }
-  /* direct 8x8 inference flag */
-  bitOp.read(true, 1);
 
-  let crop_left, crop_right, crop_top, crop_bottom;
-  if (bitOp.read(true, 1)) {
-    crop_left = bitOp.read_golomb();
-    crop_right = bitOp.read_golomb();
-    crop_top = bitOp.read_golomb();
-    crop_bottom = bitOp.read_golomb();
+  // Direct 8x8 inference flag
+  reader.readBits(1);
+
+  let cropLeft, cropRight, cropTop, cropBottom;
+  if (reader.readBits(1)) {
+    cropLeft = reader.readUE();
+    cropRight = reader.readUE();
+    cropTop = reader.readUE();
+    cropBottom = reader.readUE();
   } else {
-    crop_left = 0;
-    crop_right = 0;
-    crop_top = 0;
-    crop_bottom = 0;
+    cropLeft = 0;
+    cropRight = 0;
+    cropTop = 0;
+    cropBottom = 0;
   }
+
   details.level = details.level / 10.0;
-  details.width = (width + 1) * 16 - (crop_left + crop_right) * 2;
-  details.height = (2 - frame_mbs_only) * (height + 1) * 16 - (crop_top + crop_bottom) * 2;
+  details.width = (width + 1) * 16 - (cropLeft + cropRight) * 2;
+  details.height = (2 - frameMbsOnly) * (height + 1) * 16 - (cropTop + cropBottom) * 2;
+
   return details;
 }
 
-function readHEVCdetails(data: Buffer) {
+function HEVCDecoderConfigurationRecord(data: Buffer) {
   let details: { [key: string]: number | string } = {};
+  const reader = new BitReader(data);
+  if (data.length < 23) {
+    return details;
+  }
+  const configurationVersion = reader.readBits(8);
+  if (configurationVersion != 1) {
+    return details;
+  }
+  const general_profile_space = (reader.readBits(2) >> 0) & 0x03;
+  const general_tier_flag = (reader.readBits(1) >> 0) & 0x01;
+  const general_profile_idc = (reader.readBits(5) >> 0) & 0x1f;
+  const general_profile_compatibility_flags = reader.readBits(32);
+  const general_constraint_indicator_flags = (reader.readBits(32) << 16) | reader.readBits(16);
+  const general_level_idc = reader.readBits(8);
+  const min_spatial_segmentation_idc = reader.readBits(12);
+  const parallelismType = reader.readBits(2);
+  const chromaFormat = reader.readBits(2);
+  const bitDepthLumaMinus8 = reader.readBits(3);
+  const bitDepthChromaMinus8 = reader.readBits(3);
+  const avgFrameRate = reader.readBits(16);
+  const constantFrameRate = reader.readBits(2);
+  const numTemporalLayers = reader.readBits(3);
+  const temporalIdNested = reader.readBits(1);
+  const lengthSizeMinusOne = reader.readBits(2);
+  const numOfArrays = reader.readBits(8);
 
-  do {
-    let hevc: { [key: string]: number | {} } = {};
-    if (data.length < 23) {
-      break;
-    }
+  for (let i = 0; i < numOfArrays; i++) {
+    const array_completeness = reader.readBits(1);
+    const reserved = reader.readBits(1);
+    const nal_unit_type = reader.readBits(6);
+    const numNalus = reader.readBits(16);
 
-    let configurationVersion = data[0];
-    if (configurationVersion != 1) {
-      break;
-    }
-    let general_profile_space = (data[1] >> 6) & 0x03;
-    let general_tier_flag = (data[1] >> 5) & 0x01;
-    let general_profile_idc = data[1] & 0x1f;
-    let general_profile_compatibility_flags = (data[2] << 24) | (data[3] << 16) | (data[4] << 8) | data[5];
-    let general_constraint_indicator_flags = (data[6] << 24) | (data[7] << 16) | (data[8] << 8) | data[9];
-    general_constraint_indicator_flags = (general_constraint_indicator_flags << 16) | (data[10] << 8) | data[11];
-    let general_level_idc = data[12];
-    let min_spatial_segmentation_idc = ((data[13] & 0x0f) << 8) | data[14];
-    let parallelismType = data[15] & 0x03;
-    let chromaFormat = data[16] & 0x03;
-    let bitDepthLumaMinus8 = data[17] & 0x07;
-    let bitDepthChromaMinus8 = data[18] & 0x07;
-    let avgFrameRate = (data[19] << 8) | data[20];
-    let constantFrameRate = (data[21] >> 6) & 0x03;
-    let numTemporalLayers = (data[21] >> 3) & 0x07;
-    let temporalIdNested = (data[21] >> 2) & 0x01;
-    let lengthSizeMinusOne = data[21] & 0x03;
-    let numOfArrays = data[22];
-    let p = data.subarray(23);
-    for (let i = 0; i < numOfArrays; i++) {
-      if (p.length < 3) {
-        break;
+    for (let j = 0; j < numNalus; j++) {
+      const nalUnitLength = reader.readBits(16);
+      const nalUnit = new Uint8Array(nalUnitLength);
+
+      for (let k = 0; k < nalUnitLength; k++) {
+        nalUnit[k] = reader.readBits(8);
       }
-      let nalutype = p[0];
-      let n = (p[1] << 8) | p[2];
-      // Logger.debug(nalutype, n);
-      p = p.subarray(3);
-      for (let j = 0; j < n; j++) {
-        if (p.length < 2) {
+
+      switch (nal_unit_type) {
+        case 32: // VPS
+          decodeVPS(nalUnit);
           break;
-        }
-        let k = (p[0] << 8) | p[1];
-        // Logger.debug('k', k);
-        if (p.length < 2 + k) {
+        case 33: // SPS
+          // decodeSPS(nalUnit);
           break;
-        }
-        p = p.subarray(2);
-        if (nalutype == 33) {
-          let sps = Buffer.alloc(k);
-          p.copy(sps, 0, 0, k);
-          let psps = HEVCParseSPS(sps, hevc);
-          details.profile = general_profile_idc;
-          details.level = general_level_idc / 30.0;
-          details.width =
-            psps.pic_width_in_luma_samples - (psps.conf_win_left_offset + psps.conf_win_right_offset);
-          details.height =
-            psps.pic_height_in_luma_samples - (psps.conf_win_top_offset + psps.conf_win_bottom_offset);
-        } else if (nalutype == 160) {
-          let vps = Buffer.alloc(k);
-          p.copy(vps, 0, 0, k);
-          let vpsDecode = decodeVPS(vps);
-          details.profile = H265Profiles[vpsDecode.profile_tier_level.general_profile_idc];
-          details.level = vpsDecode.general_level_idc;
-        }
-        p = p.subarray(k);
+        case 34: // PPS
+          // decodePPS(nalUnit);
+          break;
+        default:
+          // Handle other NAL unit types
+          break;
       }
     }
-  } while (0);
-
+  }
   return details;
 }
 function decodeVPS(buffer: Uint8Array) {
@@ -509,10 +497,200 @@ function parseHrdParameters(bitReader: BitReader, commonInfPresentFlag: boolean,
   return hrd;
 }
 
+function AV1DecoderConfigurationRecord(data: Buffer) {
+  const reader = new BitReader(data);
+  const marker = reader.readBits(8); // Should be 0x81
+  const version = reader.readBits(2);
+  const seq_profile = reader.readBits(3);
+  const seq_level_idx_0 = reader.readBits(5);
+  const seq_tier_0 = reader.readBit();
+  const high_bitdepth = reader.readBit();
+  const twelve_bit = high_bitdepth ? reader.readBit() : 0;
+  const monochrome = reader.readBit();
+  const chroma_subsampling_x = reader.readBit();
+  const chroma_subsampling_y = reader.readBit();
+  const chroma_sample_position =
+    !monochrome && (chroma_subsampling_x || chroma_subsampling_y) ? reader.readBits(2) : 0;
+  const initial_presentation_delay_present = reader.readBit();
+  const initial_presentation_delay_minus_one = initial_presentation_delay_present ? reader.readBits(4) : 0;
+
+  // Additional AV1 configuration fields
+  const reserved = reader.readBits(6); // Reserved bits for future use
+  const frame_width_minus_1 = reader.readUInt(16);
+  const frame_height_minus_1 = reader.readUInt(16);
+  const bit_rate_scale = reader.readUInt(4);
+  const bit_rate_value_minus1 = reader.readUE();
+  const reserved2 = reader.readBits(7); // More reserved bits
+
+  const width = frame_width_minus_1 + 1;
+  const height = frame_height_minus_1 + 1;
+  const bitRate = (bit_rate_value_minus1 + 1) << bit_rate_scale;
+
+  // Continue decoding
+  const seq_level_idx_1 = reader.readBits(5);
+  const seq_tier_1 = reader.readBit();
+  const frame_rate_denominator = reader.readUInt(16);
+  const frame_rate_numerator = reader.readUInt(16);
+  const display_width_minus_1 = reader.readUInt(16);
+  const display_height_minus_1 = reader.readUInt(16);
+  const display_width = display_width_minus_1 + 1;
+  const display_height = display_height_minus_1 + 1;
+
+  const av1Config = {
+    marker: marker,
+    version: version,
+    profile: AV1Profiles[seq_profile],
+    seq_level_idx_0: seq_level_idx_0,
+    seq_tier_0: seq_tier_0,
+    high_bitdepth: high_bitdepth,
+    twelve_bit: twelve_bit,
+    monochrome: monochrome,
+    chroma_subsampling_x: chroma_subsampling_x,
+    chroma_subsampling_y: chroma_subsampling_y,
+    chroma_sample_position: chroma_sample_position,
+    initial_presentation_delay_present: initial_presentation_delay_present,
+    initial_presentation_delay_minus_one: initial_presentation_delay_minus_one,
+    frame_width: width,
+    frame_height: height,
+    bit_rate: bitRate,
+    seq_level_idx_1: seq_level_idx_1,
+    seq_tier_1: seq_tier_1,
+    frame_rate_denominator: frame_rate_denominator,
+    frame_rate_numerator: frame_rate_numerator,
+    height: display_width,
+    width: display_height,
+    level: 0,
+  };
+
+  //second
+  // let reader = new BitReader(data);
+  // const marker = reader.readBits(1); // 1 bit
+  // const version = reader.readBits(7); // 7 bits
+  // const seq_profile = reader.readBits(3); // 3 bits
+  // const seq_level_idx_0 = reader.readBits(5); // 5 bits
+  // const seq_tier_0 = reader.readBit(); // 1 bit
+  // const high_bitdepth = reader.readBit(); // 1 bit
+  // const twelve_bit = high_bitdepth ? reader.readBit() : 0; // 1 bit, only if high_bitdepth
+  // const monochrome = reader.readBit(); // 1 bit
+  // const chroma_subsampling_x = reader.readBit(); // 1 bit
+  // const chroma_subsampling_y = reader.readBit(); // 1 bit
+  // const chroma_sample_position =
+  //   !monochrome && (chroma_subsampling_x || chroma_subsampling_y) ? reader.readBits(2) : 0; // 2 bits
+  // const reserved = reader.readBits(3); // 3 bits reserved
+  // const initial_presentation_delay_present = reader.readBit(); // 1 bit
+  // const initial_presentation_delay_minus_one = initial_presentation_delay_present ? reader.readBits(4) : 0; // 4 bits if present
+
+  // // Read OBUs (variable length)
+  // const obus = [];
+  // while (reader.byteIndex < data.length) {
+  //   const obuLength = reader.readBits(16); // 16 bits
+  //   const obuData = new Uint8Array(obuLength);
+
+  //   for (let i = 0; i < obuLength; i++) {
+  //     obuData[i] = reader.readBits(8);
+  //   }
+
+  //   const obuType = obuData[0] & 0xf; // Last 4 bits of the first byte represent the OBU type
+
+  //   obus.push({ obuType, obuLength, obuData });
+
+  //   // Decode OBU
+  //   // decodeOBU(obuType, obuData);
+  // }
+
+  // const av1Config = {
+  //   marker,
+  //   version,
+  //   seq_profile,
+  //   seq_level_idx_0,
+  //   seq_tier_0,
+  //   high_bitdepth,
+  //   twelve_bit,
+  //   monochrome,
+  //   chroma_subsampling_x,
+  //   chroma_subsampling_y,
+  //   chroma_sample_position,
+  //   initial_presentation_delay_present,
+  //   initial_presentation_delay_minus_one,
+  //   obus,
+  // };
+  return av1Config;
+}
+
+function VP9CodecConfigurationRecord(data: Buffer) {
+  let reader = new BitReader(data);
+  const profile = reader.readBits(8);
+  const level = reader.readBits(8);
+  const widthMinusOne = reader.readBits(16);
+  const heightMinusOne = reader.readBits(16);
+  const bitDepth = reader.readBits(4);
+  const chromaSubsampling = reader.readBits(3);
+  const videoFullRangeFlag = reader.readBit();
+  const colourPrimaries = reader.readBits(8);
+  const transferCharacteristics = reader.readBits(8);
+  const matrixCoefficients = reader.readBits(8);
+  const codecInitializationDataSize = reader.readBits(16);
+
+  // Read codec initialization data
+  const codecInitializationData: Uint8Array = new Uint8Array(codecInitializationDataSize);
+  for (let i = 0; i < codecInitializationDataSize; i++) {
+    codecInitializationData[i] = reader.readBits(8);
+  }
+
+  // Calculate actual width and height
+  const width = widthMinusOne + 1;
+  const height = heightMinusOne + 1;
+
+  reader = new BitReader(data);
+  const marker = reader.readBits(8);
+  const version = reader.readBits(2);
+  //profile
+  reader.readBits(3);
+  const reserved = reader.readBits(3);
+  // widthMinusOne
+  reader.readBits(16);
+  // heightMinusOne
+  reader.readBits(16);
+  const frameRate = reader.readBits(8);
+  const aspectRatio = reader.readBits(8);
+  //const bitDepth
+  reader.readBits(4);
+  // const chromaSubsampling
+  reader.readBits(2);
+  const colorSpace = reader.readBits(1);
+  const fullRangeFlag = reader.readBits(1);
+
+  const colorRange = fullRangeFlag ? "Full range" : "Limited range";
+
+  // Process the VP9 configuration fields as needed
+  const vp9Config = {
+    profile,
+    level,
+    width,
+    height,
+    bitDepth,
+    chromaSubsampling,
+    videoFullRangeFlag,
+    colourPrimaries,
+    transferCharacteristics,
+    matrixCoefficients,
+    codecInitializationDataSize,
+    codecInitializationData,
+    marker,
+    version,
+    reserved,
+    frameRate,
+    aspectRatio,
+    colorSpace,
+    colorRange,
+  };
+  return vp9Config;
+}
+
 class BitReader {
   private buffer: Uint8Array;
-  private byteIndex: number;
-  private bitIndex: number;
+  public byteIndex: number;
+  public bitIndex: number;
 
   constructor(buffer: Uint8Array) {
     this.buffer = buffer;
@@ -523,19 +701,22 @@ class BitReader {
   readBits(numBits: number): number {
     let result = 0;
     for (let i = 0; i < numBits; i++) {
+      result <<= 1;
+      result |= (this.buffer[this.byteIndex] >> (7 - this.bitIndex)) & 1;
+      this.bitIndex++;
       if (this.bitIndex === 8) {
         this.byteIndex++;
         this.bitIndex = 0;
       }
-      result <<= 1;
-      result |= (this.buffer[this.byteIndex] >> (7 - this.bitIndex)) & 1;
-      this.bitIndex++;
     }
     return result;
   }
 
   readBit(): number {
     return this.readBits(1);
+  }
+  readUInt(numBits: number): number {
+    return this.readBits(numBits);
   }
 
   readUE(): number {
@@ -549,165 +730,16 @@ class BitReader {
     }
     return result;
   }
-}
-
-function HEVCParseSPS(SPS: Buffer, hevc: any) {
-  let psps: { [key: string]: number } = {};
-  let NumBytesInNALunit = SPS.length;
-  let NumBytesInRBSP = 0;
-  let rbsp_array = [];
-  let bitop = new BitOperations(SPS);
-
-  bitop.read(true, 1); //forbidden_zero_bit
-  bitop.read(true, 6); //nal_unit_type
-  bitop.read(true, 6); //nuh_reserved_zero_6bits
-  bitop.read(true, 3); //nuh_temporal_id_plus1
-
-  for (let i = 2; i < NumBytesInNALunit; i++) {
-    if (i + 2 < NumBytesInNALunit && bitop.read(false, 24) == 0x000003) {
-      rbsp_array.push(bitop.read(true, 8));
-      rbsp_array.push(bitop.read(true, 8));
-      i += 2;
-      let emulation_prevention_three_byte = bitop.read(true, 8); /* equal to 0x03 */
-    } else {
-      rbsp_array.push(bitop.read(true, 8));
+  readSE(): number {
+    const value = this.readUE();
+    return value & 1 ? (value + 1) >> 1 : -(value >> 1);
+  }
+  readGolomb(): number {
+    let n = 0;
+    while (this.readBit() === 0) {
+      n++;
     }
-  }
-  let rbsp = Buffer.from(rbsp_array);
-  let rbspBitop = new BitOperations(rbsp);
-  psps.sps_video_parameter_set_id = rbspBitop.read(true, 4);
-  psps.sps_max_sub_layers_minus1 = rbspBitop.read(true, 3);
-  psps.sps_temporal_id_nesting_flag = rbspBitop.read(true, 1);
-  // psps.profile_tier_level = HEVCParsePtl(rbspBitop, hevc, psps.sps_max_sub_layers_minus1);
-  psps.sps_seq_parameter_set_id = rbspBitop.read_golomb();
-  psps.chroma_format_idc = rbspBitop.read_golomb();
-  if (psps.chroma_format_idc == 3) {
-    psps.separate_colour_plane_flag = rbspBitop.read(true, 1);
-  } else {
-    psps.separate_colour_plane_flag = 0;
-  }
-  psps.pic_width_in_luma_samples = rbspBitop.read_golomb();
-  psps.pic_height_in_luma_samples = rbspBitop.read_golomb();
-  psps.conformance_window_flag = rbspBitop.read(true, 1);
-  psps.conf_win_left_offset = 0;
-  psps.conf_win_right_offset = 0;
-  psps.conf_win_top_offset = 0;
-  psps.conf_win_bottom_offset = 0;
-  if (psps.conformance_window_flag) {
-    let vert_mult = 1 + (psps.chroma_format_idc << 2);
-    let horiz_mult = 1 + (psps.chroma_format_idc << 3);
-    psps.conf_win_left_offset = rbspBitop.read_golomb() * horiz_mult;
-    psps.conf_win_right_offset = rbspBitop.read_golomb() * horiz_mult;
-    psps.conf_win_top_offset = rbspBitop.read_golomb() * vert_mult;
-    psps.conf_win_bottom_offset = rbspBitop.read_golomb() * vert_mult;
-  }
-  // Logger.debug(psps);
-  return psps;
-}
-function HEVCParsePtl(bitop: BitOperations, hevc: number, max_sub_layers_minus1: number) {
-  let general_ptl: { [key: string]: number | any[] } = {};
-
-  general_ptl.profile_space = bitop.read(true, 2);
-  general_ptl.tier_flag = bitop.read(true, 1);
-  general_ptl.profile_idc = bitop.read(true, 5);
-  general_ptl.profile_compatibility_flags = bitop.read(true, 32);
-  general_ptl.general_progressive_source_flag = bitop.read(true, 1);
-  general_ptl.general_interlaced_source_flag = bitop.read(true, 1);
-  general_ptl.general_non_packed_constraint_flag = bitop.read(true, 1);
-  general_ptl.general_frame_only_constraint_flag = bitop.read(true, 1);
-  bitop.read(true, 32);
-  bitop.read(true, 12);
-  general_ptl.level_idc = bitop.read(true, 8);
-
-  general_ptl.sub_layer_profile_present_flag = [];
-  general_ptl.sub_layer_level_present_flag = [];
-
-  for (let i = 0; i < max_sub_layers_minus1; i++) {
-    general_ptl.sub_layer_profile_present_flag[i] = bitop.read(true, 1);
-    general_ptl.sub_layer_level_present_flag[i] = bitop.read(true, 1);
-  }
-
-  if (max_sub_layers_minus1 > 0) {
-    for (let i = max_sub_layers_minus1; i < 8; i++) {
-      bitop.read(true, 2);
-    }
-  }
-
-  general_ptl.sub_layer_profile_space = new Array(max_sub_layers_minus1);
-  general_ptl.sub_layer_tier_flag = new Array(max_sub_layers_minus1);
-  general_ptl.sub_layer_profile_idc = new Array(max_sub_layers_minus1);
-  general_ptl.sub_layer_profile_compatibility_flag = new Array(max_sub_layers_minus1);
-  general_ptl.sub_layer_progressive_source_flag = new Array(max_sub_layers_minus1);
-  general_ptl.sub_layer_interlaced_source_flag = new Array(max_sub_layers_minus1);
-  general_ptl.sub_layer_non_packed_constraint_flag = new Array(max_sub_layers_minus1);
-  general_ptl.sub_layer_frame_only_constraint_flag = new Array(max_sub_layers_minus1);
-  general_ptl.sub_layer_level_idc = new Array(max_sub_layers_minus1);
-
-  for (let i = 0; i < max_sub_layers_minus1; i++) {
-    if (general_ptl.sub_layer_profile_present_flag[i]) {
-      general_ptl.sub_layer_profile_space[i] = bitop.read(true, 2);
-      general_ptl.sub_layer_tier_flag[i] = bitop.read(true, 1);
-      general_ptl.sub_layer_profile_idc[i] = bitop.read(true, 5);
-      general_ptl.sub_layer_profile_compatibility_flag[i] = bitop.read(true, 32);
-      general_ptl.sub_layer_progressive_source_flag[i] = bitop.read(true, 1);
-      general_ptl.sub_layer_interlaced_source_flag[i] = bitop.read(true, 1);
-      general_ptl.sub_layer_non_packed_constraint_flag[i] = bitop.read(true, 1);
-      general_ptl.sub_layer_frame_only_constraint_flag[i] = bitop.read(true, 1);
-      bitop.read(true, 32);
-      bitop.read(true, 12);
-    }
-    if (general_ptl.sub_layer_level_present_flag[i]) {
-      general_ptl.sub_layer_level_idc[i] = bitop.read(true, 8);
-    } else {
-      general_ptl.sub_layer_level_idc[i] = 1;
-    }
-  }
-  return general_ptl;
-}
-function readAV1details(data: Buffer) {}
-function readVP9details(data: Buffer) {}
-
-class BitOperations {
-  totalLength: number;
-  buffer: Buffer;
-  startBit: number;
-  outOfRange: boolean;
-  constructor(data: Buffer) {
-    this.buffer = data;
-    this.totalLength = data.length;
-    this.startBit = 0;
-    this.outOfRange = false;
-  }
-
-  read(update: boolean, len: number) {
-    if (this.startBit >= this.buffer.length * 8) {
-      this.outOfRange = true;
-      return 0;
-    }
-    let byteOffset = Math.floor(this.startBit / 8);
-    let bitOffSet = this.startBit % 8;
-    let value = 0;
-    for (let i = 0; i < len; i++) {
-      let byte = this.buffer[byteOffset];
-      let bit = (byte >> (7 - bitOffSet)) & 1;
-      value = (value << 1) | bit;
-
-      bitOffSet++;
-      if (bitOffSet === 8) {
-        bitOffSet = 0;
-        byteOffset++;
-      }
-    }
-    if (update) {
-      this.startBit += len;
-    }
-    return value;
-  }
-
-  read_golomb() {
-    let n;
-    for (n = 0; this.read(true, 1) == 0 && !this.outOfRange; n++);
-    return (1 << n) + this.read(true, n) - 1;
+    return (1 << n) + this.readBits(n) - 1;
   }
 }
 
