@@ -521,13 +521,12 @@ class RtmpSession {
         } else {
           this.videoCodecSequenceHeader = data.subarray(5);
         }
-        let specs = codecSpecificConfiguration(this.videoCodecSequenceHeader, codecId);
-        if (specs) {
-          this.videoWidth = specs.width as number;
-          this.videoHeight = specs.height as number;
-          this.videoProfileName = specs.profile as string;
-          this.videoLevel = specs.level as number;
-        }
+        this.getCodecSpecificConfig(codecId).then((specs) => {
+          this.videoWidth = specs?.width as number;
+          this.videoHeight = specs?.height as number;
+          this.videoProfileName = specs?.profile as string;
+          this.videoLevel = specs?.level as number;
+        });
       }
     }
 
@@ -594,6 +593,9 @@ class RtmpSession {
         }
       }
     }
+  }
+  async getCodecSpecificConfig(codecId: number) {
+    return codecSpecificConfiguration(this.videoCodecSequenceHeader, codecId);
   }
 
   rtmpInvokeHandler(data: Buffer) {

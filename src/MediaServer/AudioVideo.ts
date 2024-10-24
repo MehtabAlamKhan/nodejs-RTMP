@@ -234,268 +234,419 @@ function H264DecoderConfigurationRecord(data: Buffer) {
   return details;
 }
 
+//todo
 function HEVCDecoderConfigurationRecord(data: Buffer) {
-  let details: { [key: string]: number | string } = {};
-  const reader = new BitReader(data);
-  if (data.length < 23) {
-    return details;
-  }
-  const configurationVersion = reader.readBits(8);
-  if (configurationVersion != 1) {
-    return details;
-  }
-  const general_profile_space = (reader.readBits(2) >> 0) & 0x03;
-  const general_tier_flag = (reader.readBits(1) >> 0) & 0x01;
-  const general_profile_idc = (reader.readBits(5) >> 0) & 0x1f;
-  const general_profile_compatibility_flags = reader.readBits(32);
-  const general_constraint_indicator_flags = (reader.readBits(32) << 16) | reader.readBits(16);
-  const general_level_idc = reader.readBits(8);
-  const min_spatial_segmentation_idc = reader.readBits(12);
-  const parallelismType = reader.readBits(2);
-  const chromaFormat = reader.readBits(2);
-  const bitDepthLumaMinus8 = reader.readBits(3);
-  const bitDepthChromaMinus8 = reader.readBits(3);
-  const avgFrameRate = reader.readBits(16);
-  const constantFrameRate = reader.readBits(2);
-  const numTemporalLayers = reader.readBits(3);
-  const temporalIdNested = reader.readBits(1);
-  const lengthSizeMinusOne = reader.readBits(2);
-  const numOfArrays = reader.readBits(8);
+  const parsedData: any = {};
 
-  for (let i = 0; i < numOfArrays; i++) {
-    const array_completeness = reader.readBits(1);
-    const reserved = reader.readBits(1);
-    const nal_unit_type = reader.readBits(6);
-    const numNalus = reader.readBits(16);
+  // Read configurationVersion (1 byte)
+  parsedData.configurationVersion = data[0];
+
+  // Read general_profile_space (2 bits), general_tier_flag (1 bit), and general_profile_idc (5 bits)
+  const profileSpaceTierProfile = data[1];
+  parsedData.generalProfileSpace = (profileSpaceTierProfile >> 6) & 0x03;
+  parsedData.generalTierFlag = (profileSpaceTierProfile >> 5) & 0x01;
+  parsedData.generalProfileIDC = profileSpaceTierProfile & 0x1f;
+
+  // Read general_profile_compatibility_flags (32 bits)
+  parsedData.generalProfileCompatibilityFlags = (data[2] << 24) | (data[3] << 16) | (data[4] << 8) | data[5];
+
+  // Read general_constraint_indicator_flags (48 bits) as a number (split into high and low parts)
+  const highConstraintFlags = (data[6] << 16) | (data[7] << 8) | data[8];
+  const lowConstraintFlags = (data[9] << 16) | (data[10] << 8) | data[11];
+  parsedData.generalConstraintIndicatorFlags = { high: highConstraintFlags, low: lowConstraintFlags };
+
+  // Read general_level_idc (1 byte)
+  parsedData.generalLevelIDC = data[12];
+
+  // Read LengthSizeMinusOne (2 bits) and reserved bits
+  parsedData.lengthSizeMinusOne = data[13] & 0x03;
+
+  // Read numOfArrays (1 byte)
+  parsedData.numOfArrays = data[14];
+
+  // Read arrays (NAL unit arrays)
+  parsedData.arrays = [];
+  let index = 15; // Start reading from the 15th byte
+
+  for (let i = 0; i < parsedData.numOfArrays; i++) {
+    const array: any = {};
+    array.arrayCompleteness = (data[index] >> 7) & 0x01; // 1 bit
+    array.nalUnitType = data[index] & 0x3f; // 6 bits
+    const numNalus = (data[index + 1] << 8) | data[index + 2]; // 16 bits
+    index += 3;
+
+    array.nalUnits = []; // Array to hold NAL units
 
     for (let j = 0; j < numNalus; j++) {
-      const nalUnitLength = reader.readBits(16);
-      const nalUnit = new Uint8Array(nalUnitLength);
+      const nalUnit: any = {};
+      nalUnit.length = (data[index] << 8) | data[index + 1]; // Read length (16 bits)
+      index += 2;
 
-      for (let k = 0; k < nalUnitLength; k++) {
-        nalUnit[k] = reader.readBits(8);
+      nalUnit.data = []; // Array to hold NAL unit data
+
+      // Read NAL unit data
+      for (let k = 0; k < nalUnit.length; k++) {
+        nalUnit.data.push(data[index]); // Read each byte of NAL unit data
+        index++;
       }
 
-      switch (nal_unit_type) {
-        case 32: // VPS
-          decodeVPS(nalUnit);
-          break;
-        case 33: // SPS
-          // decodeSPS(nalUnit);
-          break;
-        case 34: // PPS
-          // decodePPS(nalUnit);
-          break;
-        default:
-          // Handle other NAL unit types
-          break;
-      }
+      array.nalUnits.push(nalUnit); // Add the NAL unit to the array
     }
+
+    parsedData.arrays.push(array); // Add the array to the parsed data
   }
-  return details;
+
+  return parsedData;
 }
-function decodeVPS(buffer: Uint8Array) {
-  let bitReader = new BitReader(buffer);
-  let vps: { [key: string]: any } = {};
 
-  vps["video_parameter_set_id"] = bitReader.readBits(4);
-  vps["vps_reserved_three_2bits"] = bitReader.readBits(2);
-  vps["vps_max_layers_minus1"] = bitReader.readBits(6);
-  vps["vps_max_sub_layers_minus1"] = bitReader.readBits(3);
-  vps["vps_temporal_id_nesting_flag"] = bitReader.readBit();
-  vps["vps_reserved_0xffff_16bits"] = bitReader.readBits(16);
+function decodeVPS(nalUnit: Uint8Array) {
+  const vps: any = {};
+  let index = 0;
 
-  vps["profile_tier_level"] = parseProfileTierLevel(bitReader, vps["vps_max_sub_layers_minus1"]);
+  // nal_unit_type (type 32 is VPS)
+  const nalUnitType = (nalUnit[0] >> 1) & 0x3f;
+  vps.nalUnitType = nalUnitType;
 
-  vps["vps_sub_layer_ordering_info_present_flag"] = bitReader.readBit();
-  vps["vps_max_dec_pic_buffering_minus1"] = [];
-  vps["vps_max_num_reorder_pics"] = [];
-  vps["vps_max_latency_increase_plus1"] = [];
+  // Skip the NAL header (first byte)
+  index = 2;
 
-  let startLayer = vps["vps_sub_layer_ordering_info_present_flag"] ? 0 : vps["vps_max_sub_layers_minus1"];
-  for (let i = startLayer; i <= vps["vps_max_sub_layers_minus1"]; i++) {
-    vps["vps_max_dec_pic_buffering_minus1"][i] = bitReader.readUE();
-    vps["vps_max_num_reorder_pics"][i] = bitReader.readUE();
-    vps["vps_max_latency_increase_plus1"][i] = bitReader.readUE();
+  // Read vps_video_parameter_set_id (4 bits)
+  vps.vpsVideoParameterSetID = nalUnit[index] & 0x0f;
+
+  // Read vps_base_layer_internal_flag (1 bit) and vps_base_layer_available_flag (1 bit)
+  vps.vpsBaseLayerInternalFlag = (nalUnit[index] >> 4) & 0x01;
+  vps.vpsBaseLayerAvailableFlag = (nalUnit[index] >> 5) & 0x01;
+  index++;
+
+  // Read vps_max_layers_minus1 (6 bits)
+  vps.vpsMaxLayersMinus1 = nalUnit[index] & 0x3f;
+
+  // Read vps_max_sub_layers_minus1 (3 bits)
+  vps.vpsMaxSubLayersMinus1 = (nalUnit[index] >> 6) & 0x07;
+  index++;
+
+  // Read vps_temporal_id_nesting_flag (1 bit)
+  vps.vpsTemporalIdNestingFlag = (nalUnit[index] >> 7) & 0x01;
+
+  // Skip vps_reserved_0xffff_16bits (16 bits)
+  index += 2;
+
+  // Read profile_tier_level for the base layer
+  vps.profileTierLevel = decodeProfileTierLevel(nalUnit, index, vps.vpsMaxSubLayersMinus1);
+  index += vps.profileTierLevel.size; // Update index by size of profile_tier_level
+
+  // Read vps_max_layer_id (6 bits)
+  vps.vpsMaxLayerID = nalUnit[index] & 0x3f;
+
+  // Read vps_num_layer_sets_minus1 (16 bits)
+  vps.vpsNumLayerSetsMinus1 = (nalUnit[index + 1] << 8) | nalUnit[index];
+  index += 2;
+
+  // Read layer_id_included_flag (for each layer set)
+  vps.layerIdIncludedFlags = [];
+  for (let i = 0; i <= vps.vpsNumLayerSetsMinus1; i++) {
+    vps.layerIdIncludedFlags[i] = [];
+    for (let j = 0; j <= vps.vpsMaxLayerID; j++) {
+      const flag = (nalUnit[index] >> (7 - j)) & 0x01;
+      vps.layerIdIncludedFlags[i].push(flag);
+    }
+    index++;
   }
 
-  vps["vps_max_layer_id"] = bitReader.readBits(6);
-  vps["vps_num_layer_sets_minus1"] = bitReader.readUE();
-  vps["layer_id_included_flag"] = [];
+  // Optional timing information, if vps_timing_info_present_flag is set
+  vps.vpsTimingInfoPresentFlag = (nalUnit[index] >> 7) & 0x01;
+  index++;
 
-  for (let i = 1; i <= vps["vps_num_layer_sets_minus1"]; i++) {
-    vps["layer_id_included_flag"][i] = [];
-    for (let j = 0; j <= vps["vps_max_layer_id"]; j++) {
-      vps["layer_id_included_flag"][i][j] = bitReader.readBit();
+  if (vps.vpsTimingInfoPresentFlag) {
+    // vps_num_units_in_tick (32 bits) and vps_time_scale (32 bits)
+    vps.vpsNumUnitsInTick =
+      (nalUnit[index] << 24) | (nalUnit[index + 1] << 16) | (nalUnit[index + 2] << 8) | nalUnit[index + 3];
+    index += 4;
+    vps.vpsTimeScale =
+      (nalUnit[index] << 24) | (nalUnit[index + 1] << 16) | (nalUnit[index + 2] << 8) | nalUnit[index + 3];
+    index += 4;
+
+    // vps_poc_proportional_to_timing_flag (1 bit)
+    vps.vpsPocProportionalToTimingFlag = (nalUnit[index] >> 7) & 0x01;
+    index++;
+
+    if (vps.vpsPocProportionalToTimingFlag) {
+      // vps_num_ticks_poc_diff_one_minus1 (32 bits)
+      vps.vpsNumTicksPocDiffOneMinus1 =
+        (nalUnit[index] << 24) | (nalUnit[index + 1] << 16) | (nalUnit[index + 2] << 8) | nalUnit[index + 3];
+      index += 4;
     }
   }
 
-  vps["vps_timing_info_present_flag"] = bitReader.readBit();
-  if (vps["vps_timing_info_present_flag"]) {
-    vps["vps_num_units_in_tick"] = bitReader.readBits(32);
-    vps["vps_time_scale"] = bitReader.readBits(32);
-    vps["vps_poc_proportional_to_timing_flag"] = bitReader.readBit();
+  // vps_num_hrd_parameters (16 bits)
+  vps.vpsNumHrdParameters = (nalUnit[index] << 8) | nalUnit[index + 1];
+  index += 2;
 
-    if (vps["vps_poc_proportional_to_timing_flag"]) {
-      vps["vps_num_ticks_poc_diff_one_minus1"] = bitReader.readUE();
-    }
+  vps.hrdParameters = [];
+  for (let i = 0; i < vps.vpsNumHrdParameters; i++) {
+    const hrdLayerSetIdx = (nalUnit[index] << 8) | nalUnit[index + 1];
+    const cprmsPresentFlag = nalUnit[index + 2] & 0x01;
+    index += 3;
 
-    vps["vps_num_hrd_parameters"] = bitReader.readUE();
-    vps["hrd_layer_set_idx"] = [];
-    vps["cprms_present_flag"] = [];
-
-    for (let i = 0; i < vps["vps_num_hrd_parameters"]; i++) {
-      vps["hrd_layer_set_idx"][i] = bitReader.readUE();
-      if (i > 0) {
-        vps["cprms_present_flag"][i] = bitReader.readBit();
-      }
-      vps["hrd_parameters"][i] = parseHrdParameters(
-        bitReader,
-        vps["cprms_present_flag"][i],
-        vps["vps_max_sub_layers_minus1"]
-      );
-    }
-  }
-
-  vps["vps_extension_flag"] = bitReader.readBit();
-  if (vps["vps_extension_flag"]) {
-    // Read vps_extension_data_flag bits...
+    const hrdParams = decodeHrdParameters(
+      nalUnit,
+      index,
+      cprmsPresentFlag ? true : false,
+      vps.vpsMaxSubLayersMinus1
+    );
+    vps.hrdParameters.push({ hrdLayerSetIdx, cprmsPresentFlag, hrdParams });
+    index += hrdParams.size;
   }
 
   return vps;
 }
-function parseProfileTierLevel(bitReader: BitReader, maxSubLayersMinus1: number) {
-  let ptl: { [key: string]: any } = {};
-  ptl["general_profile_space"] = bitReader.readBits(2);
-  ptl["general_tier_flag"] = bitReader.readBit();
-  ptl["general_profile_idc"] = bitReader.readBits(5);
 
-  ptl["general_profile_compatibility_flags"] = [];
-  for (let i = 0; i < 32; i++) {
-    ptl["general_profile_compatibility_flags"][i] = bitReader.readBit();
-  }
+function decodeProfileTierLevel(nalUnit: Uint8Array, index: number, maxSubLayersMinus1: number) {
+  const profileTierLevel: any = {};
 
-  ptl["general_progressive_source_flag"] = bitReader.readBit();
-  ptl["general_interlaced_source_flag"] = bitReader.readBit();
-  ptl["general_non_packed_constraint_flag"] = bitReader.readBit();
-  ptl["general_frame_only_constraint_flag"] = bitReader.readBit();
+  // Read general_profile_space (2 bits), general_tier_flag (1 bit), and general_profile_idc (5 bits)
+  profileTierLevel.generalProfileSpace = (nalUnit[index] >> 6) & 0x03;
+  profileTierLevel.generalTierFlag = (nalUnit[index] >> 5) & 0x01;
+  profileTierLevel.generalProfileIDC = nalUnit[index] & 0x1f;
+  index++;
 
-  // Skip remaining bits
-  bitReader.readBits(44); // assuming a 64-bit field, skipping already read 20 bits
+  // Read general_profile_compatibility_flags (32 bits)
+  profileTierLevel.generalProfileCompatibilityFlags =
+    (nalUnit[index] << 24) | (nalUnit[index + 1] << 16) | (nalUnit[index + 2] << 8) | nalUnit[index + 3];
+  index += 4;
 
-  ptl["general_level_idc"] = bitReader.readBits(8);
+  // Read general_constraint_indicator_flags (48 bits)
+  const highConstraintFlags = (nalUnit[index] << 16) | (nalUnit[index + 1] << 8) | nalUnit[index + 2];
+  const lowConstraintFlags = (nalUnit[index + 3] << 16) | (nalUnit[index + 4] << 8) | nalUnit[index + 5];
+  profileTierLevel.generalConstraintIndicatorFlags = { high: highConstraintFlags, low: lowConstraintFlags };
+  index += 6;
 
-  ptl["sub_layer_profile_present_flag"] = [];
-  ptl["sub_layer_level_present_flag"] = [];
+  // Read general_level_idc (1 byte)
+  profileTierLevel.generalLevelIDC = nalUnit[index];
+  index++;
 
+  // Parse sub-layer profile_present_flag and sub_layer_level_present_flag
+  profileTierLevel.subLayerProfilePresentFlag = [];
+  profileTierLevel.subLayerLevelPresentFlag = [];
   for (let i = 0; i < maxSubLayersMinus1; i++) {
-    ptl["sub_layer_profile_present_flag"][i] = bitReader.readBit();
-    ptl["sub_layer_level_present_flag"][i] = bitReader.readBit();
+    profileTierLevel.subLayerProfilePresentFlag[i] = (nalUnit[index] >> 7) & 0x01;
+    profileTierLevel.subLayerLevelPresentFlag[i] = (nalUnit[index] >> 6) & 0x01;
+    index++;
   }
 
-  if (maxSubLayersMinus1 > 0) {
-    for (let i = maxSubLayersMinus1; i < 8; i++) {
-      bitReader.readBits(2); // reserved bits
-    }
-  }
-
-  ptl["sub_layer_profile_space"] = [];
-  ptl["sub_layer_tier_flag"] = [];
-  ptl["sub_layer_profile_idc"] = [];
-  ptl["sub_layer_profile_compatibility_flags"] = [];
-  ptl["sub_layer_level_idc"] = [];
-
+  // If subLayerProfilePresentFlag or subLayerLevelPresentFlag is set, parse sub-layer information
+  profileTierLevel.subLayers = [];
   for (let i = 0; i < maxSubLayersMinus1; i++) {
-    if (ptl["sub_layer_profile_present_flag"][i]) {
-      ptl["sub_layer_profile_space"][i] = bitReader.readBits(2);
-      ptl["sub_layer_tier_flag"][i] = bitReader.readBit();
-      ptl["sub_layer_profile_idc"][i] = bitReader.readBits(5);
+    const subLayer: any = {};
+    if (profileTierLevel.subLayerProfilePresentFlag[i]) {
+      subLayer.subLayerProfileSpace = (nalUnit[index] >> 6) & 0x03;
+      subLayer.subLayerTierFlag = (nalUnit[index] >> 5) & 0x01;
+      subLayer.subLayerProfileIDC = nalUnit[index] & 0x1f;
+      index++;
 
-      ptl["sub_layer_profile_compatibility_flags"][i] = [];
-      for (let j = 0; j < 32; j++) {
-        ptl["sub_layer_profile_compatibility_flags"][i][j] = bitReader.readBit();
-      }
+      // Read sub_layer_profile_compatibility_flags (32 bits)
+      subLayer.subLayerProfileCompatibilityFlags =
+        (nalUnit[index] << 24) | (nalUnit[index + 1] << 16) | (nalUnit[index + 2] << 8) | nalUnit[index + 3];
+      index += 4;
 
-      ptl["sub_layer_progressive_source_flag"] = bitReader.readBit();
-      ptl["sub_layer_interlaced_source_flag"] = bitReader.readBit();
-      ptl["sub_layer_non_packed_constraint_flag"] = bitReader.readBit();
-      ptl["sub_layer_frame_only_constraint_flag"] = bitReader.readBit();
-
-      // Skip remaining bits
-      bitReader.readBits(44); // assuming a 64-bit field, skipping already read 20 bits
+      // Read sub_layer_constraint_indicator_flags (48 bits)
+      const subLayerHighConstraintFlags = (nalUnit[index] << 16) | (nalUnit[index + 1] << 8) | nalUnit[index + 2];
+      const subLayerLowConstraintFlags =
+        (nalUnit[index + 3] << 16) | (nalUnit[index + 4] << 8) | nalUnit[index + 5];
+      subLayer.subLayerConstraintIndicatorFlags = {
+        high: subLayerHighConstraintFlags,
+        low: subLayerLowConstraintFlags,
+      };
+      index += 6;
     }
-
-    if (ptl["sub_layer_level_present_flag"][i]) {
-      ptl["sub_layer_level_idc"][i] = bitReader.readBits(8);
+    if (profileTierLevel.subLayerLevelPresentFlag[i]) {
+      // Read sub_layer_level_idc (1 byte)
+      subLayer.subLayerLevelIDC = nalUnit[index];
+      index++;
     }
+    profileTierLevel.subLayers.push(subLayer);
   }
 
-  return ptl;
+  // Calculate the total size of the profile_tier_level structure
+  profileTierLevel.size = index;
+
+  return profileTierLevel;
 }
 
-function parseHrdParameters(bitReader: BitReader, commonInfPresentFlag: boolean, maxNumSubLayersMinus1: number) {
-  let hrd: { [key: string]: any } = {};
+function decodeHrdParameters(
+  nalUnit: Uint8Array,
+  index: number,
+  cprmsPresentFlag: boolean,
+  maxSubLayersMinus1: number
+) {
+  const hrdParams: any = {};
 
-  if (commonInfPresentFlag) {
-    hrd["nal_hrd_parameters_present_flag"] = bitReader.readBit();
-    hrd["vcl_hrd_parameters_present_flag"] = bitReader.readBit();
+  if (cprmsPresentFlag) {
+    // Read nal_hrd_parameters_present_flag (1 bit) and vcl_hrd_parameters_present_flag (1 bit)
+    hrdParams.nalHrdParametersPresentFlag = (nalUnit[index] >> 7) & 0x01;
+    hrdParams.vclHrdParametersPresentFlag = (nalUnit[index] >> 6) & 0x01;
+    index++;
 
-    if (hrd["nal_hrd_parameters_present_flag"] || hrd["vcl_hrd_parameters_present_flag"]) {
-      hrd["sub_pic_hrd_params_present_flag"] = bitReader.readBit();
+    if (hrdParams.nalHrdParametersPresentFlag || hrdParams.vclHrdParametersPresentFlag) {
+      // Read sub_pic_hrd_params_present_flag (1 bit)
+      hrdParams.subPicHrdParamsPresentFlag = (nalUnit[index] >> 7) & 0x01;
+      index++;
 
-      if (hrd["sub_pic_hrd_params_present_flag"]) {
-        hrd["tick_divisor_minus2"] = bitReader.readBits(8);
-        hrd["du_cpb_removal_delay_increment_length_minus1"] = bitReader.readBits(5);
-        hrd["sub_pic_cpb_params_in_pic_timing_sei_flag"] = bitReader.readBit();
-        hrd["dpb_output_delay_du_length_minus1"] = bitReader.readBits(5);
+      if (hrdParams.subPicHrdParamsPresentFlag) {
+        // Read tick_divisor_minus2 (8 bits)
+        hrdParams.tickDivisorMinus2 = nalUnit[index];
+        index++;
+
+        // Read du_cpb_removal_delay_increment_length_minus1 (5 bits)
+        hrdParams.duCpbRemovalDelayIncrementLengthMinus1 = (nalUnit[index] >> 3) & 0x1f;
+
+        // Read sub_pic_cpb_params_in_pic_timing_sei_flag (1 bit)
+        hrdParams.subPicCpbParamsInPicTimingSeiFlag = (nalUnit[index] >> 2) & 0x01;
+
+        // Read dpb_output_delay_du_length_minus1 (5 bits)
+        hrdParams.dpbOutputDelayDuLengthMinus1 = nalUnit[index] & 0x1f;
+        index++;
       }
 
-      hrd["bit_rate_scale"] = bitReader.readBits(4);
-      hrd["cpb_size_scale"] = bitReader.readBits(4);
+      // Read bit_rate_scale (4 bits) and cpb_size_scale (4 bits)
+      hrdParams.bitRateScale = (nalUnit[index] >> 4) & 0x0f;
+      hrdParams.cpbSizeScale = nalUnit[index] & 0x0f;
+      index++;
 
-      if (hrd["sub_pic_hrd_params_present_flag"]) {
-        hrd["cpb_size_du_scale"] = bitReader.readBits(4);
+      if (hrdParams.subPicHrdParamsPresentFlag) {
+        // Read cpb_size_du_scale (4 bits)
+        hrdParams.cpbSizeDuScale = (nalUnit[index] >> 4) & 0x0f;
+        index++;
       }
 
-      hrd["initial_cpb_removal_delay_length_minus1"] = bitReader.readBits(5);
-      hrd["au_cpb_removal_delay_length_minus1"] = bitReader.readBits(5);
-      hrd["dpb_output_delay_length_minus1"] = bitReader.readBits(5);
+      // Read initial_cpb_removal_delay_length_minus1 (5 bits)
+      hrdParams.initialCpbRemovalDelayLengthMinus1 = (nalUnit[index] >> 3) & 0x1f;
+
+      // Read au_cpb_removal_delay_length_minus1 (5 bits)
+      hrdParams.auCpbRemovalDelayLengthMinus1 = (nalUnit[index] >> 2) & 0x1f;
+
+      // Read dpb_output_delay_length_minus1 (5 bits)
+      hrdParams.dpbOutputDelayLengthMinus1 = nalUnit[index] & 0x1f;
+      index++;
     }
   }
 
-  hrd["cpb_cnt_minus1"] = [];
-  hrd["bit_rate_value_minus1"] = [];
-  hrd["cpb_size_value_minus1"] = [];
-  hrd["cpb_size_du_value_minus1"] = [];
-  hrd["bit_rate_du_value_minus1"] = [];
-  hrd["cbr_flag"] = [];
+  // For each sub-layer, read bit rate and CPB size
+  hrdParams.subLayerHrdParameters = [];
+  for (let i = 0; i <= maxSubLayersMinus1; i++) {
+    const subLayerHrd: any = {};
 
-  for (let i = 0; i <= maxNumSubLayersMinus1; i++) {
-    if (commonInfPresentFlag) {
-      hrd["cpb_cnt_minus1"][i] = bitReader.readUE();
-
-      hrd["bit_rate_value_minus1"][i] = [];
-      hrd["cpb_size_value_minus1"][i] = [];
-      hrd["cpb_size_du_value_minus1"][i] = [];
-      hrd["bit_rate_du_value_minus1"][i] = [];
-      hrd["cbr_flag"][i] = [];
-
-      for (let j = 0; j <= hrd["cpb_cnt_minus1"][i]; j++) {
-        hrd["bit_rate_value_minus1"][i][j] = bitReader.readUE();
-        hrd["cpb_size_value_minus1"][i][j] = bitReader.readUE();
-
-        if (hrd["sub_pic_hrd_params_present_flag"]) {
-          hrd["cpb_size_du_value_minus1"][i][j] = bitReader.readUE();
-          hrd["bit_rate_du_value_minus1"][i][j] = bitReader.readUE();
-        }
-
-        hrd["cbr_flag"][i][j] = bitReader.readBit();
-      }
+    if (hrdParams.nalHrdParametersPresentFlag) {
+      // Read nal_sub_layer_hrd_parameters for this sub-layer
+      subLayerHrd.nalBitRate = (nalUnit[index] << 8) | nalUnit[index + 1];
+      index += 2;
     }
+
+    if (hrdParams.vclHrdParametersPresentFlag) {
+      // Read vcl_sub_layer_hrd_parameters for this sub-layer
+      subLayerHrd.vclBitRate = (nalUnit[index] << 8) | nalUnit[index + 1];
+      index += 2;
+    }
+
+    hrdParams.subLayerHrdParameters.push(subLayerHrd);
   }
 
-  return hrd;
+  // Calculate the total size of the HRD parameters
+  hrdParams.size = index;
+
+  return hrdParams;
 }
+
+function decodeSPS(nalUnit: Uint8Array): any {
+  const sps: any = {};
+  let index = 2; // Start after the NAL unit header
+
+  // nal_unit_type (type 33 is SPS)
+  const nalUnitType = (nalUnit[0] >> 1) & 0x3f;
+  sps.nalUnitType = nalUnitType;
+
+  // profile_tier_level(1)
+  sps.spsVideoParameterSetID = nalUnit[index] & 0x0f; // 4 bits
+  sps.spsMaxSubLayersMinus1 = (nalUnit[index] >> 4) & 0x07; // 3 bits
+  index++;
+
+  // Sequence parameter set information
+  sps.spsSeqParameterSetID = (nalUnit[index] >> 4) & 0x0f; // 4 bits
+  sps.chromaFormatIDC = nalUnit[index] & 0x03; // 2 bits
+  index++;
+
+  // Pic width and height
+  sps.picWidthInLumaSamples = (nalUnit[index] << 8) | nalUnit[index + 1]; // 16 bits
+  index += 2;
+  sps.picHeightInLumaSamples = (nalUnit[index] << 8) | nalUnit[index + 1]; // 16 bits
+  index += 2;
+
+  // Bit depth
+  sps.bitDepthLumaMinus8 = (nalUnit[index] >> 4) & 0x0f; // 4 bits
+  sps.bitDepthChromaMinus8 = nalUnit[index] & 0x0f; // 4 bits
+  index++;
+
+  // Log2_max_pic_order_cnt_lsb_minus4
+  sps.log2MaxPicOrderCntLsbMinus4 = nalUnit[index] & 0x0f; // 4 bits
+  index++;
+
+  // Max number of reference frames
+  sps.maxNumRefFrames = nalUnit[index] & 0x1f; // 5 bits
+  index++;
+
+  // SPS flags
+  sps.spsTemporalIdNestingFlag = (nalUnit[index] >> 7) & 0x01; // 1 bit
+  index++;
+
+  // Additional SPS fields
+  sps.spsScalingListDataPresentFlag = (nalUnit[index] >> 7) & 0x01; // 1 bit
+  index++;
+
+  if (sps.spsScalingListDataPresentFlag) {
+    // Assume decodeScalingListData exists
+    sps.scalingListData = decodeScalingListData(nalUnit, index);
+    index += sps.scalingListData.size; // Update index to skip the scaling list data
+  }
+
+  // Conformance window flag
+  sps.conformanceWindowFlag = (nalUnit[index] >> 7) & 0x01; // 1 bit
+  index++;
+
+  if (sps.conformanceWindowFlag) {
+    // sps.confWinLeftOffset = readUE(nalUnit, index);
+    index += sps.confWinLeftOffset.lengthInBits;
+
+    // sps.confWinRightOffset = readUE(nalUnit, index);
+    index += sps.confWinRightOffset.lengthInBits;
+
+    // sps.confWinTopOffset = readUE(nalUnit, index);
+    index += sps.confWinTopOffset.lengthInBits;
+
+    // sps.confWinBottomOffset = readUE(nalUnit, index);
+    index += sps.confWinBottomOffset.lengthInBits;
+  }
+
+  // Timing information
+  sps.vuiParametersPresentFlag = (nalUnit[index] >> 7) & 0x01; // 1 bit
+  index++;
+
+  if (sps.vuiParametersPresentFlag) {
+    // Assume decodeVuiParameters exists
+    sps.vuiParameters = decodeVuiParameters(nalUnit, index);
+  }
+
+  return sps;
+}
+
+function decodeScalingListData(nalUnit: Uint8Array, startIndex: number) {
+  // Implement scaling list data decoding logic
+}
+
+function decodeVuiParameters(nalUnit: Uint8Array, startIndex: number) {
+  // Implement VUI parameters decoding logic
+}
+
+function decodePPS(buffer: Uint8Array) {}
 
 function AV1DecoderConfigurationRecord(data: Buffer) {
   const reader = new BitReader(data);
