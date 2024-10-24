@@ -5,13 +5,13 @@ import * as essentials from "../Essentials";
 import { getFfmpegVersion } from "../misc";
 
 class TransMuxingSession extends EventEmitter {
-  mediaroot = "";
-  ffmpegPath = "";
-  streamPath = "";
-  rtmpPort = 0;
-  app = "";
-  username = "";
-  ffmpegExe!: ChildProcessWithoutNullStreams;
+  private mediaroot = "";
+  private ffmpegPath = "";
+  private streamPath = "";
+  private rtmpPort = 0;
+  private app = "";
+  private username = "";
+  private ffmpegExe!: ChildProcessWithoutNullStreams;
   constructor(conf: any) {
     super();
     this.mediaroot = conf.mediaroot;
@@ -32,8 +32,8 @@ class TransMuxingSession extends EventEmitter {
     let dashIndexFile = "index.mpd";
     let dashFlags = `[f=dash:window_size=3:extra_window_size=5]${outPath}/${dashIndexFile}'`;
 
-    let recordedIndexFile = "Recorded.mp4";
-    let recordFlags = `[f=mp4:./media/live/jason/Recorded.mp4|[f=mp4,c:v=hevc_nvenc,preset=veryfast,tune=zerolatency,scale=-2:480]./media/live/jason/recorded_480p.mp4]`;
+    // let recordedIndexFile = "Recorded.mp4";
+    // let recordFlags = `[f=mp4:./media/live/jason/Recorded.mp4|[f=mp4,c:v=hevc_nvenc,preset=veryfast,tune=zerolatency,scale=-2:480]./media/live/jason/recorded_480p.mp4]`;
 
     mkdirSync(outPath, { recursive: true });
 

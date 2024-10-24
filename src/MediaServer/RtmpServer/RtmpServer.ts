@@ -2,7 +2,7 @@ import Net from "node:net";
 import RtmpSession from "./RtmpSession";
 
 class RtmpServer {
-  server: Net.Server;
+  private server: Net.Server;
   constructor() {
     this.server = Net.createServer((socket) => {
       let session: RtmpSession | null = new RtmpSession(socket);

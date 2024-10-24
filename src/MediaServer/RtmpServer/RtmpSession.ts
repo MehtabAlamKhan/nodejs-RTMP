@@ -97,57 +97,57 @@ const FRAME_TYPE_METADATA = 4;
 const FRAME_TYPE_MPEG2TS_SEQUNCE_START = 5;
 
 class RtmpSession {
-  RTMP_IN_CHUNK_SIZE: number;
-  RTMP_OUT_CHUNK_SIZE: number;
-  ID: string;
-  socket: net.Socket;
-  ackSize: number;
-  inAckSize: number;
-  lastInAckSize: number;
-  connectionState: number;
-  bodyLength: number;
-  typeId: number;
-  remaining: number;
-  clientId: string;
-  port: number | undefined;
-  videoHeight: number;
-  videoWidth: number;
-  videoFps: number;
-  videoCount: number;
-  audioSampleRate: number;
-  metaData: Buffer;
-  firstVideoPacketRecieved: boolean;
-  aacSequenceHeader: Buffer;
-  videoCodecSequenceHeader: Buffer;
-  audioCodec: number;
-  audioCodecName: string;
-  audioProfileName: string;
-  audioChannels: number;
-  videoCodec: number;
-  videoCodecName: string;
-  videoProfileName: string;
-  videoLevel: number;
-  parsedPacket: RTMP_PacketType;
-  appName: string;
-  playerStreamId: number;
-  publishStreamId: number;
-  publishStreamPath: string;
-  players: Set<string>;
-  cachedFrames: number;
-  streamCache: Set<Buffer>;
-  inPackets: Map<number, RTMP_PacketType>;
-  rtmpHeaderBuffer: Buffer;
-  basicHeaderLength: number;
-  parsingState: number;
-  connectCmdObj: {};
-  connectTime: Date;
-  objectEncoding: number;
-  startTimestamp: number;
-  pingInterval!: NodeJS.Timeout;
-  pingTimeMs: number;
-  muxer: boolean;
-  stopped: boolean;
-  videoCodedData: Buffer;
+  private RTMP_OUT_CHUNK_SIZE: number;
+  private ID: string;
+  private RTMP_IN_CHUNK_SIZE: number;
+  private socket: net.Socket;
+  private ackSize: number;
+  private inAckSize: number;
+  private lastInAckSize: number;
+  private connectionState: number;
+  private bodyLength: number;
+  private typeId: number;
+  private remaining: number;
+  private clientId: string;
+  private port: number | undefined;
+  private videoHeight: number;
+  private videoWidth: number;
+  private videoFps: number;
+  private videoCount: number;
+  private audioSampleRate: number;
+  private metaData: Buffer;
+  private firstVideoPacketRecieved: boolean;
+  private aacSequenceHeader: Buffer;
+  private videoCodecSequenceHeader: Buffer;
+  private audioCodec: number;
+  private audioCodecName: string;
+  private audioProfileName: string;
+  private audioChannels: number;
+  private videoCodec: number;
+  private videoCodecName: string;
+  private videoProfileName: string;
+  private videoLevel: number;
+  private parsedPacket: RTMP_PacketType;
+  private appName: string;
+  private playerStreamId: number;
+  private publishStreamId: number;
+  private publishStreamPath: string;
+  private players: Set<string>;
+  private cachedFrames: number;
+  private streamCache: Set<Buffer>;
+  private inPackets: Map<number, RTMP_PacketType>;
+  private rtmpHeaderBuffer: Buffer;
+  private basicHeaderLength: number;
+  private parsingState: number;
+  private connectCmdObj: {};
+  private connectTime: Date;
+  private objectEncoding: number;
+  private startTimestamp: number;
+  private pingInterval!: NodeJS.Timeout;
+  private pingTimeMs: number;
+  private muxer: boolean;
+  private stopped: boolean;
+  private videoCodedData: Buffer;
 
   constructor(socket: net.Socket) {
     this.clientId = socket.remoteAddress + ":" + socket.remotePort;
@@ -227,7 +227,7 @@ class RtmpSession {
     this.socket.setTimeout(25000);
   }
 
-  onSocketData(data: Buffer) {
+  private onSocketData(data: Buffer) {
     switch (this.connectionState) {
       case C0C1_STATE:
         const clientProtocolVersion = data[0];
@@ -246,17 +246,17 @@ class RtmpSession {
         break;
     }
   }
-  onSocketClose() {
+  private onSocketClose() {
     this.stop();
   }
-  onSocketError() {
+  private onSocketError() {
     this.stop();
   }
-  onSocketTimeout() {
+  private onSocketTimeout() {
     this.stop();
   }
 
-  startParsingRtmpPackets(data: Buffer) {
+  private startParsingRtmpPackets(data: Buffer) {
     let totalLength = data.length;
     let offSet = 0;
     let extendedTimestamp = 0;
@@ -330,7 +330,7 @@ class RtmpSession {
     }
   }
 
-  rtmpPacketParse() {
+  private rtmpPacketParse() {
     let ftmType = this.rtmpHeaderBuffer[0] >> 6;
     let cid = 0;
     if (this.basicHeaderLength === 3) {
@@ -352,7 +352,7 @@ class RtmpSession {
     this.readMessageHeader();
   }
 
-  readMessageHeader() {
+  private readMessageHeader() {
     let offset = this.basicHeaderLength;
 
     if (this.parsedPacket.header.fmtType <= 2) {
@@ -369,7 +369,7 @@ class RtmpSession {
     }
   }
 
-  rtmpPacketAlloc() {
+  private rtmpPacketAlloc() {
     let hbl = this.parsedPacket.header.bodyLength;
     if (this.parsedPacket.capacity < hbl) {
       this.parsedPacket.payload = Buffer.alloc(hbl + 1024);
@@ -377,7 +377,7 @@ class RtmpSession {
     }
   }
 
-  createRtmpHeader(): RTMP_HeaderType {
+  private createRtmpHeader(): RTMP_HeaderType {
     return {
       fmtType: 0,
       chunkStreamID: 0,
@@ -388,7 +388,7 @@ class RtmpSession {
     };
   }
 
-  rtmpPayloadHandler() {
+  private rtmpPayloadHandler() {
     let typeID = this.parsedPacket.header.typeID;
     let offset = this.parsedPacket.header.typeID === RTMP_TYPE_FLEX_MESSAGE ? 1 : 0;
     let payload = this.parsedPacket.payload.subarray(offset, offset + this.parsedPacket.header.bodyLength);
@@ -420,7 +420,7 @@ class RtmpSession {
         return;
     }
   }
-  rtmpControlHandler(data: Buffer, typeID: number) {
+  private rtmpControlHandler(data: Buffer, typeID: number) {
     switch (typeID) {
       case 1: //set chunk size
         this.RTMP_IN_CHUNK_SIZE = data.readUInt32BE(0);
@@ -431,9 +431,9 @@ class RtmpSession {
       default:
     }
   }
-  eventHandler() {}
+  private eventHandler() {}
 
-  rtmpAudioHandler(data: Buffer) {
+  private rtmpAudioHandler(data: Buffer) {
     data = data.subarray(0, this.parsedPacket.header.bodyLength);
     let format = data[0] >> 4;
     let sampleRate = (data[0] >> 2) & 3;
@@ -491,7 +491,7 @@ class RtmpSession {
     }
   }
 
-  rtmpVideoHandler(data: Buffer) {
+  private rtmpVideoHandler(data: Buffer) {
     data = data.subarray(0, this.parsedPacket.header.bodyLength);
     let codecId = data[0] & 15;
     let isExHeader = data[0] >> 7;
@@ -594,11 +594,11 @@ class RtmpSession {
       }
     }
   }
-  async getCodecSpecificConfig(codecId: number) {
+  private async getCodecSpecificConfig(codecId: number) {
     return codecSpecificConfiguration(this.videoCodecSequenceHeader, codecId);
   }
 
-  rtmpInvokeHandler(data: Buffer) {
+  private rtmpInvokeHandler(data: Buffer) {
     const invokeMessage = AMFd.decodeAmf0cmd(data);
     switch (invokeMessage.cmd) {
       case "connect":
@@ -632,7 +632,7 @@ class RtmpSession {
     }
   }
 
-  rtmpDataHandler(data: Buffer) {
+  private rtmpDataHandler(data: Buffer) {
     let dataMessage = AMFd.decodeAmf0data(data);
     switch (dataMessage.cmd) {
       case "@setDataFrame":
@@ -670,7 +670,7 @@ class RtmpSession {
     }
   }
 
-  onConnect(invokeMessage: any) {
+  private onConnect(invokeMessage: any) {
     this.appName = invokeMessage.cmdObj.app;
     essentials.streamEvents.emit("connect", invokeMessage);
     this.connectCmdObj = invokeMessage.cmdObj;
@@ -686,12 +686,12 @@ class RtmpSession {
     this.setChunkSize(this.RTMP_OUT_CHUNK_SIZE);
     this.respondConnect(invokeMessage);
   }
-  onCreateStream(invokeMessage: any) {
+  private onCreateStream(invokeMessage: any) {
     this.respondCreateStream(invokeMessage.transId);
   }
-  onCall(invokeMessage: any) {}
+  private onCall(invokeMessage: any) {}
 
-  onPublish(invokeMessage: any) {
+  private onPublish(invokeMessage: any) {
     //Do authentication with stream key and stream path
     let streamPath = "/" + this.appName + "/" + invokeMessage.streamKey.split("?")[0];
     this.publishStreamId = this.parsedPacket.header.streamID;
@@ -718,7 +718,7 @@ class RtmpSession {
     essentials.streamEvents.emit("postStreamStart", this.ID, streamPath);
   }
 
-  onPlay(invokeMessage: any) {
+  private onPlay(invokeMessage: any) {
     this.publishStreamPath = "/" + this.appName + "/" + invokeMessage.streamName;
     this.playerStreamId = this.parsedPacket.header.streamID;
     this.muxer = true;
@@ -729,7 +729,7 @@ class RtmpSession {
       console.log(this.publishStreamPath + " NOT FOUND");
     }
   }
-  onDeleteStream(invokeMessage: any) {
+  private onDeleteStream(invokeMessage: any) {
     if (invokeMessage.streamId == this.playerStreamId) {
       //its the Muxer/Transcoder
       //remove the muxer/transcoder from publishers players
@@ -769,13 +769,13 @@ class RtmpSession {
     }
   }
 
-  respondPlay(sid: number) {
+  private respondPlay(sid: number) {
     this.sendStreamStatus(0, this.playerStreamId);
     this.sendStatusMessage(this.playerStreamId, "status", "NetStream.Play.Reset", "Playing and resetting stream.");
     this.sendStatusMessage(this.playerStreamId, "status", "NetStream.Play.Start", "Started playing stream.");
     this.sendRtmpSampleAccess(sid);
   }
-  onStartPlay() {
+  private onStartPlay() {
     let streamerId = essentials.publishers.get(this.publishStreamPath);
     let streamer = essentials.streamSessions.get(streamerId);
     if (streamer) {
@@ -832,7 +832,7 @@ class RtmpSession {
     }
   }
 
-  sendRtmpSampleAccess(sid: number) {
+  private sendRtmpSampleAccess(sid: number) {
     let opt = {
       cmd: "|RtmpSampleAccess",
       bool1: false,
@@ -841,14 +841,14 @@ class RtmpSession {
     this.encodeAndRespondInvokeMsg(sid, opt);
   }
 
-  sendStreamStatus(status: number, id: number) {
+  private sendStreamStatus(status: number, id: number) {
     let buffer = Buffer.from([2, 0, 0, 0, 0, 0, 6, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     buffer.writeUInt16BE(status, 12);
     buffer.writeUInt32BE(id, 14);
     this.socket.write(buffer);
   }
 
-  sendStatusMessage(sid: number, level: string, code: string, description: string) {
+  private sendStatusMessage(sid: number, level: string, code: string, description: string) {
     let opt = {
       cmd: "onStatus",
       transId: 0,
@@ -861,7 +861,7 @@ class RtmpSession {
     };
     this.encodeAndRespondInvokeMsg(sid, opt);
   }
-  sendPingRequest() {
+  private sendPingRequest() {
     let currentTimestamp = Date.now() - this.startTimestamp;
     let packet = this.createRtmpPacket();
     packet.header.fmtType = RTMP_CHUNK_TYPE_0;
@@ -880,29 +880,29 @@ class RtmpSession {
     let chunks = this.createRtmpChunks(packet);
     this.socket.write(chunks);
   }
-  sendACK(size: number) {
+  private sendACK(size: number) {
     let buffer = Buffer.from([2, 0, 0, 0, 0, 0, 4, 3, 0, 0, 0, 0, 0, 0, 0, 0]);
     buffer.writeUInt32BE(size, 12);
     this.socket.write(buffer);
   }
-  sendWindowACK(size: number) {
+  private sendWindowACK(size: number) {
     let windowAckBuffer = Buffer.from([2, 0, 0, 0, 0, 0, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0]);
     windowAckBuffer.writeUInt32BE(size, 12);
     this.socket.write(windowAckBuffer);
   }
-  setPeerBandwidth(size: number, type: number) {
+  private setPeerBandwidth(size: number, type: number) {
     let peerBandBuffer = Buffer.from([2, 0, 0, 0, 0, 0, 5, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     peerBandBuffer.writeUInt32BE(size, 12);
     //set peer bandwidth limit type
     peerBandBuffer[16] = type;
     this.socket.write(peerBandBuffer);
   }
-  setChunkSize(size: number) {
+  private setChunkSize(size: number) {
     let chunkSizeBuffer = Buffer.from([2, 0, 0, 0, 0, 0, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
     chunkSizeBuffer.writeUInt32BE(size, 12);
     this.socket.write(chunkSizeBuffer);
   }
-  respondConnect(invokeMessage: any) {
+  private respondConnect(invokeMessage: any) {
     let resOpt = {
       cmd: "_result",
       transId: invokeMessage.transId,
@@ -919,7 +919,7 @@ class RtmpSession {
     };
     this.encodeAndRespondInvokeMsg(0, resOpt);
   }
-  respondCreateStream(tid: number) {
+  private respondCreateStream(tid: number) {
     let assignableStreamId;
     if (essentials.availableStreamIDs.nextReusableStreamID != null) {
       assignableStreamId = essentials.availableStreamIDs.nextReusableStreamID;
@@ -936,7 +936,7 @@ class RtmpSession {
     };
     this.encodeAndRespondInvokeMsg(0, resOpt);
   }
-  respondPublish(sid: number, level: string, code: string, description: string) {
+  private respondPublish(sid: number, level: string, code: string, description: string) {
     let resOpt = {
       cmd: "onStatus",
       transId: sid,
@@ -950,7 +950,7 @@ class RtmpSession {
     this.encodeAndRespondInvokeMsg(0, resOpt);
   }
 
-  encodeAndRespondInvokeMsg(sid: number, resOpt: any) {
+  private encodeAndRespondInvokeMsg(sid: number, resOpt: any) {
     let resRtmpPacket = this.createRtmpPacket();
     resRtmpPacket.header.fmtType = RTMP_FMT_TYPE_0;
     resRtmpPacket.header.chunkStreamID = RTMP_CHANNEL_INVOKE;
@@ -961,7 +961,7 @@ class RtmpSession {
     let chunks = this.createRtmpChunks(resRtmpPacket);
     this.socket.write(chunks);
   }
-  createRtmpPacket(fmt: number = 0, cid: number = 0): RTMP_PacketType {
+  private createRtmpPacket(fmt: number = 0, cid: number = 0): RTMP_PacketType {
     var header: RTMP_HeaderType = {
       fmtType: fmt,
       chunkStreamID: cid,
@@ -979,7 +979,7 @@ class RtmpSession {
     };
   }
 
-  createRtmpChunks(data: RTMP_PacketType): Buffer {
+  private createRtmpChunks(data: RTMP_PacketType): Buffer {
     let header = data.header;
     let payload = data.payload;
     let payloadSize = data.header.bodyLength;
@@ -1023,7 +1023,7 @@ class RtmpSession {
     return buffer;
   }
 
-  createChunkBasicHeader(fmtType: number, chunkID: number): Buffer {
+  private createChunkBasicHeader(fmtType: number, chunkID: number): Buffer {
     let basicHeader;
     if (chunkID >= 64 + 255) {
       basicHeader = Buffer.alloc(3);
@@ -1040,7 +1040,7 @@ class RtmpSession {
     return basicHeader;
   }
 
-  createChunkMessageHeader(header: RTMP_HeaderType): Buffer {
+  private createChunkMessageHeader(header: RTMP_HeaderType): Buffer {
     let buffer = Buffer.alloc(RTMP_MSG_HEADER_SIZE[header.fmtType]);
 
     if (header.fmtType <= RTMP_FMT_TYPE_2) {
