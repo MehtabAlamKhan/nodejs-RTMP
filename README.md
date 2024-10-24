@@ -1,4 +1,4 @@
-# RTMP Server Implementaition Nodejs Typescript ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white) ![NodeJS](https://img.shields.io/badge/Node.js-339933?logo=Node.js&logoColor=white)
+# RTMP Server Implementation Nodejs Typescript ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white) ![NodeJS](https://img.shields.io/badge/Node.js-339933?logo=Node.js&logoColor=white)
 Enhanced RTMP (FourCC) server implementation in nodejs and typescript with HLS and MPEG-DASH
 
 # Build and usage
