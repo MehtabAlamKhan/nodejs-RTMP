@@ -1,3 +1,7 @@
+/* RTMP handshake using HMAC and predefined
+   secret keys FMSConst and FPConst
+   Author - Mehtab Alam Khan 2024 */
+
 import Crypto from "node:crypto";
 
 const MESSAGE_FORMAT_0 = 0;
@@ -8,16 +12,10 @@ const SHA256Digestlength = 32;
 const RTMP_BUFFER_SIZE = 1536;
 
 const ServerFMSConst = "Genuine Adobe Flash Media Server 001";
-const ServerFMSConstBuffer = Buffer.concat([
-  Buffer.from(ServerFMSConst, "utf-8"),
-  Crypto.randomBytes(32),
-]);
+const ServerFMSConstBuffer = Buffer.concat([Buffer.from(ServerFMSConst, "utf-8"), Crypto.randomBytes(32)]);
 
 const ClientFPConst = "Genuine Adobe Flash Player 001";
-const ClientFPConstBuffer = Buffer.concat([
-  Buffer.from(ClientFPConst, "utf-8"),
-  Crypto.randomBytes(32),
-]);
+const ClientFPConstBuffer = Buffer.concat([Buffer.from(ClientFPConst, "utf-8"), Crypto.randomBytes(32)]);
 
 function generateS0S1S2(data: Buffer) {
   let version = Buffer.alloc(1, 3);
@@ -28,11 +26,7 @@ function generateS0S1S2(data: Buffer) {
     return Buffer.concat([version, data, data]);
   }
 
-  let res = Buffer.concat([
-    version,
-    genS1(messageFormat),
-    genS2(messageFormat, data),
-  ]);
+  let res = Buffer.concat([version, genS1(messageFormat), genS2(messageFormat, data)]);
   return res;
 }
 
@@ -45,10 +39,7 @@ function getMessageFormat(data: Buffer) {
   // 772:775    Obfuscated pointer to "Genuine FMS" key
   // 776:1535   Random Data and "Genuine FMS" key.
   let sdl = GetServerGenuineFMSConstDigestOffset(data.subarray(772, 776));
-  let message = Buffer.concat(
-    [data.subarray(0, sdl), data.subarray(SHA256Digestlength + sdl)],
-    1504
-  );
+  let message = Buffer.concat([data.subarray(0, sdl), data.subarray(SHA256Digestlength + sdl)], 1504);
   let calculatedHmac = calcHmac(message, ClientFPConst);
   let providedHmac = data.subarray(sdl, sdl + SHA256Digestlength);
   if (calculatedHmac.equals(providedHmac)) {
@@ -62,10 +53,7 @@ function getMessageFormat(data: Buffer) {
   // 12:1531    Random Data, 128-bit Diffie-Hellmann key and "Genuine FMS" key.
   // 1532:1535  Obfuscated pointer to 128-bit Diffie-Hellmann key
   sdl = GetClientGenuineFPConstDigestOffset(data.subarray(8, 12));
-  message = Buffer.concat(
-    [data.subarray(0, sdl), data.subarray(sdl + SHA256Digestlength)],
-    1504
-  );
+  message = Buffer.concat([data.subarray(0, sdl), data.subarray(sdl + SHA256Digestlength)], 1504);
   calculatedHmac = calcHmac(message, ClientFPConst);
   providedHmac = data.subarray(sdl, sdl + SHA256Digestlength);
   if (calculatedHmac.equals(providedHmac)) {
@@ -92,10 +80,7 @@ function calcHmac(data: Buffer, key: string | Buffer) {
 
 function genS1(msgFmt: number) {
   let res = Buffer.concat(
-    [
-      Buffer.from([0, 0, 0, 0, 1, 2, 3, 4]),
-      Crypto.randomBytes(RTMP_BUFFER_SIZE - 8),
-    ],
+    [Buffer.from([0, 0, 0, 0, 1, 2, 3, 4]), Crypto.randomBytes(RTMP_BUFFER_SIZE - 8)],
     RTMP_BUFFER_SIZE
   );
   let sdo;

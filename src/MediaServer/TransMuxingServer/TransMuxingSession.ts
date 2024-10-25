@@ -32,12 +32,13 @@ class TransMuxingSession extends EventEmitter {
     let dashIndexFile = "index.mpd";
     let dashFlags = `[f=dash:window_size=3:extra_window_size=5]${outPath}/${dashIndexFile}'`;
 
-    // let recordedIndexFile = "Recorded.mp4";
-    // let recordFlags = `[f=mp4:./media/live/jason/Recorded.mp4|[f=mp4,c:v=hevc_nvenc,preset=veryfast,tune=zerolatency,scale=-2:480]./media/live/jason/recorded_480p.mp4]`;
+    let recordedIndexFile = "Recorded.mp4";
+    let recordFlags = `[f=mp4:./media/live/jason/Recorded.mp4|[f=mp4,c:v=hevc_nvenc,preset=veryfast,tune=zerolatency,scale=-2:480]./media/live/jason/recorded_480p.mp4]`;
 
     mkdirSync(outPath, { recursive: true });
 
-    let argv = `-y -i ${inPath} -c:v copy -c:a aac -b:a 128k -ac 1 -ar 44100 -f tee -map 0:a? -map 0:v? ${hlsFlags}|`;
+    let argv = `-y -i ${inPath} -c:v copy -c:a aac ./media/live/jason/recorded.flv`;
+    // let argv = `-y -i ${inPath} -c:v copy -c:a aac -b:a 128k -ac 1 -ar 44100 -f tee -map 0:a? -map 0:v? ${hlsFlags}|`;
     let argvArray = argv.split(" ");
 
     this.ffmpegExe = spawn(this.ffmpegPath, argvArray);

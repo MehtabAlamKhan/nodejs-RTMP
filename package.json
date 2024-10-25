@@ -6,7 +6,8 @@
     "build": "npx tsc",
     "start": "set ENV=PROD && node dist/server.js",
     "watch": "tsc -w",
-    "dev": "set ENV=DEV && node --watch dist/server.js"
+    "dev": "set ENV=DEV && node --watch dist/server.js",
+    "rtmpdh": "node --watch dist/MediaServer/RtmpServer/RtmpHandshakeDh.js"
   },
   "keywords": [],
   "author": "",

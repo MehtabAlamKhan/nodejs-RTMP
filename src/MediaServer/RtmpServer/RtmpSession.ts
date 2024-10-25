@@ -1,10 +1,13 @@
+/* RTMP Server session. Includes both streamers and players
+   Author - Mehtab Alam Khan 2024 */
+
 import "../Logger";
 import net from "net";
 import { Buffer } from "buffer";
 import * as AMFd from "../AMF/amf0Decoding";
 import * as AMFe from "../AMF/amf0Encoding";
 import fs from "node:fs";
-import generateS0S1S2 from "./RtmpHandshake";
+import generateS0S1S2 from "./RtmpHandshakeHmac";
 import * as essentials from "../Essentials";
 import { generateID } from "../misc";
 import { AudioCodeNames, AudioSampleRates, codecSpecificConfiguration, VideoCodecNames } from "../AudioVideo";
@@ -740,6 +743,7 @@ class RtmpSession {
         essentials.streamSessions.delete(this.ID);
         console.log("MUXING DONE FOR STREAMPATH : " + session.publishStreamPath);
       }
+      this.sendStatusMessage(this.playerStreamId, "status", "NetStream.Play.Stop", "Stopped playing stream.");
       this.stopped = true;
     }
     if (invokeMessage.streamId == this.publishStreamId) {
@@ -750,6 +754,7 @@ class RtmpSession {
         "NetStream.Unpublish.Success",
         `${this.publishStreamPath} is now unpublished.`
       );
+      //handle the players
       for (let playerID of this.players) {
         let playerSession = essentials.streamSessions.get(playerID);
         if (playerSession) {
@@ -759,6 +764,7 @@ class RtmpSession {
             "NetStream.Play.UnpublishNotify",
             "stream is now unpublished."
           );
+          playerSession.sendStreamStatus(STREAM_END, playerSession.playerStreamId);
         }
         essentials.streamSessions.delete(playerID);
       }
